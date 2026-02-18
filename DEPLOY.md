@@ -77,16 +77,16 @@ services:
         echo 'Starting web server...' &&
         uvicorn main:app --host 0.0.0.0 --port 8000
       "
-    depends_on:
-      - nginx  # Ensure nginx starts first
+    # Remove depends_on nginx - creates circular dependency
 
   nginx:
-    image: nginx:alpine
+    build: 
+      context: .
+      dockerfile: Dockerfile.nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/ssl/certs:ro
       - ./ssl:/etc/ssl/private:ro
     restart: unless-stopped
