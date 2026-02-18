@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Check-in</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .confirm-container {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .child-info {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .child-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .child-details {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .medical-alert {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+            color: #856404;
+        }
+
+        .medical-alert h4 {
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .medical-alert h4::before {
+            content: "⚠️";
+            margin-right: 0.5rem;
+        }
+
+        .program-selection {
+            margin: 2rem 0;
+        }
+
+        .program-selection h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .program-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .program-option {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .program-option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .program-option.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .program-name {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .program-age {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .volunteer-input {
+            margin: 2rem 0;
+        }
+
+        .volunteer-input label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .volunteer-input input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .volunteer-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .success-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .confirm-container {
+                padding: 1rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .program-options {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Confirm Check-in</h1>
+        <p>Review child information and select program</p>
+    </div>
+
+    <div class="main-container">
+        <div class="confirm-container">
+            <!-- Child Information -->
+            <div class="child-info">
+                <div class="child-name" id="child-name">Loading...</div>
+                <div class="child-details" id="child-details">Loading...</div>
+                
+                <!-- Medical alerts will be inserted here if needed -->
+                <div id="medical-alerts"></div>
+            </div>
+
+            <!-- Program Selection -->
+            <div class="program-selection">
+                <h3>Select Program</h3>
+                <div class="program-options" id="program-options">
+                    <!-- Programs will be populated here -->
+                </div>
+            </div>
+
+            <!-- Volunteer Input -->
+            <div class="volunteer-input">
+                <label for="volunteer-name">Volunteer Name</label>
+                <input type="text" id="volunteer-name" placeholder="Enter your name" required>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="cancelCheckin()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmCheckin()">Check In</button>
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Checking in...</p>
+            </div>
+
+            <!-- Success State -->
+            <div class="success-message" id="success-message">
+                <div class="success-icon">✅</div>
+                <div class="success-text" id="success-text">Check-in successful!</div>
+                <button class="btn btn-primary" onclick="scanNext()">Scan Next Child</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionData = {
+            sessionId: null,
+            childInfo: null,
+            selectedProgram: null,
+            stationId: 'entrance-a',
+            deviceId: 'tablet-' + Math.random().toString(36).substr(2, 9)
+        };
+
+        function initializePage() {
+            // Get URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            sessionData.sessionId = urlParams.get('session_id');
+            const childName = urlParams.get('child_name');
+            const programs = JSON.parse(urlParams.get('programs') || '[]');
+            
+            if (!sessionData.sessionId) {
+                showError('Session information missing. Please scan again.');
+                return;
+            }
+
+            // Update child name
+            document.getElementById('child-name').textContent = childName || 'Unknown Child';
+            
+            // Populate program options
+            const programOptions = document.getElementById('program-options');
+            programs.forEach(program => {
+                const option = document.createElement('div');
+                option.className = 'program-option';
+                option.dataset.programId = program.id;
+                option.onclick = () => selectProgram(program.id);
+                
+                option.innerHTML = `
+                    <div class="program-name">${program.name}</div>
+                    <div class="program-age">
+                        ${program.min_age !== null && program.max_age !== null 
+                            ? `Ages ${program.min_age}-${program.max_age}` 
+                            : 'All ages'}
+                    </div>
+                `;
+                
+                programOptions.appendChild(option);
+            });
+
+            // Select first program by default
+            if (programs.length > 0) {
+                selectProgram(programs[0].id);
+            }
+
+            // Fetch detailed child information
+            fetchChildDetails();
+        }
+
+        function fetchChildDetails() {
+            fetch(`/api/session/${sessionData.sessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    sessionData.childInfo = data;
+                    updateChildDetails(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching child details:', error);
+                });
+        }
+
+        function updateChildDetails(childInfo) {
+            const detailsDiv = document.getElementById('child-details');
+            const medicalAlertsDiv = document.getElementById('medical-alerts');
+            
+            // Update basic details
+            let detailsHTML = `
+                Family: ${childInfo.family_name || 'N/A'}<br>
+                Birth Date: ${childInfo.birth_date || 'N/A'}
+            `;
+            detailsDiv.innerHTML = detailsHTML;
+
+            // Add medical alerts if needed
+            medicalAlertsDiv.innerHTML = '';
+            
+            if (childInfo.allergies) {
+                const alert = document.createElement('div');
+                alert.className = 'medical-alert';
+                alert.innerHTML = `
+                    <h4>Allergies</h4>
+                    <p>${childInfo.allergies}</p>
+                `;
+                medicalAlertsDiv.appendChild(alert);
+            }
+            
+            if (childInfo.medications) {
+                const alert = document.createElement('div');
+                alert.className = 'medical-alert';
+                alert.innerHTML = `
+                    <h4>Medications</h4>
+                    <p>${childInfo.medications}</p>
+                `;
+                medicalAlertsDiv.appendChild(alert);
+            }
+            
+            if (childInfo.special_notes) {
+                const alert = document.createElement('div');
+                alert.className = 'medical-alert';
+                alert.innerHTML = `
+                    <h4>Special Notes</h4>
+                    <p>${childInfo.special_notes}</p>
+                `;
+                medicalAlertsDiv.appendChild(alert);
+            }
+        }
+
+        function selectProgram(programId) {
+            // Remove previous selection
+            document.querySelectorAll('.program-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // Add selection to clicked option
+            const selectedOption = document.querySelector(`[data-program-id="${programId}"]`);
+            if (selectedOption) {
+                selectedOption.classList.add('selected');
+                sessionData.selectedProgram = programId;
+            }
+        }
+
+        function confirmCheckin() {
+            const volunteerName = document.getElementById('volunteer-name').value.trim();
+            
+            if (!volunteerName) {
+                showError('Please enter your name');
+                return;
+            }
+            
+            if (!sessionData.selectedProgram) {
+                showError('Please select a program');
+                return;
+            }
+
+            // Show loading
+            document.querySelector('.confirm-container > div:not(.loading):not(.success-message)').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+
+            // Send check-in request
+            fetch('/api/checkin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: sessionData.sessionId,
+                    station_id: sessionData.stationId,
+                    device_id: sessionData.deviceId,
+                    created_by: volunteerName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess(data.child_name || 'Child');
+                } else {
+                    showError(data.message || 'Check-in failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Connection error. Please try again.');
+            });
+        }
+
+        function showSuccess(childName) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success-message').style.display = 'block';
+            document.getElementById('success-text').textContent = `${childName} checked in successfully!`;
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            alert(message); // Simple error handling for MVP
+        }
+
+        function cancelCheckin() {
+            if (confirm('Are you sure you want to cancel this check-in?')) {
+                window.location.href = '/scanner';
+            }
+        }
+
+        function scanNext() {
+            window.location.href = '/scanner';
+        }
+
+        // Initialize page on load
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./static:/app/static
+    environment:
+      - DB_PATH=/data/attendance.db
+      - STATION_TOKENS=entrance-a,entrance-b,checkout-a
+      - WORKER_POLL_INTERVAL=2
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: python worker.py
+    volumes:
+      - ./data:/data
+      - ./whatsapp_session:/home/pi/.whatsapp_session
+    environment:
+      - DB_PATH=/data/attendance.db
+      - PLAYWRIGHT_USER_DATA_DIR=/home/pi/.whatsapp_session
+      - WORKER_POLL_INTERVAL=2
+    restart: unless-stopped
+    depends_on:
+      - app
