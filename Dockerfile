@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Clone the repository
-RUN git clone https://github.com/ChiefMcGill/Attendance-Tracker-for-Kids-Ministry.git .
+# Clone the repository (force rebuild)
+RUN git clone --depth 1 https://github.com/ChiefMcGill/Attendance-Tracker-for-Kids-Ministry.git .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
