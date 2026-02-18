@@ -47,9 +47,31 @@ async def init_database():
     with open(schema_path, 'r') as f:
         schema_sql = f.read()
     
-    # Execute schema using sync connection
+    # Execute schema using sync connection - split into individual statements
     with sync_engine.connect() as conn:
-        conn.execute(text(schema_sql))
+        # Split SQL into individual statements
+        statements = []
+        current_statement = ""
+        
+        # Split by semicolon but preserve semicolons within statements
+        lines = schema_sql.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith('--') or line == '':
+                continue  # Skip comments and empty lines
+            current_statement += line + ' '
+            if ';' in line:
+                # Found end of statement
+                statement = current_statement.strip()
+                if statement:
+                    statements.append(statement)
+                current_statement = ""
+        
+        # Execute each statement individually
+        for statement in statements:
+            if statement.strip():  # Skip empty statements
+                conn.execute(text(statement))
+        
         conn.commit()
     
     # Seed initial data if needed
