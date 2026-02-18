@@ -1,12 +1,15 @@
+import os
+import uuid
+import secrets
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import csv
 import io
-
-from database import Database, init_database, get_db
-from models import (
-    ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
-    RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo
-)
+from typing import List, Optional
 
 # Initialize FastAPI app
 app = FastAPI(
