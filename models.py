@@ -18,7 +18,6 @@ class RegisterRequest(BaseModel):
     child: dict
     family: dict
     parent: dict
-    qr_value: str
     program_id: int
 
 # Response models
@@ -38,6 +37,7 @@ class RegisterResponse(BaseModel):
     success: bool
     message: str
     child_id: Optional[int] = None
+    qr_value: Optional[str] = None
 
 # Child info model
 class ChildInfo(BaseModel):

@@ -361,16 +361,6 @@
                     </div>
                 </div>
 
-                <!-- QR Code Assignment -->
-                <div class="qr-section">
-                    <h3>QR Code Assignment</h3>
-                    <p>Assign a QR code to this child for check-in</p>
-                    <div class="qr-input">
-                        <input type="text" id="qr-value" name="qr_value" placeholder="Enter QR code value" required>
-                        <button type="button" class="btn btn-secondary" onclick="generateQR()">Generate QR</button>
-                    </div>
-                </div>
-
                 <!-- Program Selection -->
                 <div class="form-section">
                     <h2>Program Selection</h2>
@@ -413,9 +403,6 @@
             
             // Set up form submission
             document.getElementById('registration-form').addEventListener('submit', handleRegistration);
-            
-            // Generate initial QR code
-            generateQR();
         }
 
         function loadPrograms() {
@@ -438,12 +425,6 @@
                 option.textContent = program.name;
                 select.appendChild(option);
             });
-        }
-
-        function generateQR() {
-            // Generate a random QR code value
-            const qrValue = 'KID-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-            document.getElementById('qr-value').value = qrValue;
         }
 
         function handleRegistration(event) {
@@ -481,7 +462,6 @@
                     email: formData.get('parent_email') || null,
                     relationship: formData.get('parent_relationship')
                 },
-                qr_value: formData.get('qr_value'),
                 program_id: parseInt(formData.get('program_id'))
             };
 
@@ -496,7 +476,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showSuccess(data.child_id);
+                    showSuccess(data.child_id, data.qr_value);
                 } else {
                     showError(data.message || 'Registration failed');
                 }
@@ -512,7 +492,7 @@
                 'family-name',
                 'parent-first-name', 'parent-last-name', 'parent-phone', 'parent-relationship',
                 'child-first-name', 'child-last-name', 'child-birth-date',
-                'qr-value', 'program'
+                'program'
             ];
 
             for (const fieldId of requiredFields) {
@@ -534,12 +514,11 @@
             return true;
         }
 
-        function showSuccess(childId) {
+        function showSuccess(childId, qrValue) {
             document.getElementById('loading').style.display = 'none';
             document.getElementById('success-message').style.display = 'block';
             
             const childName = document.getElementById('child-first-name').value + ' ' + document.getElementById('child-last-name').value;
-            const qrValue = document.getElementById('qr-value').value;
             
             document.getElementById('success-text').innerHTML = `
                 ${childName} registered successfully!<br><br>

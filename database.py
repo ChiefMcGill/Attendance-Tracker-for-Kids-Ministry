@@ -307,5 +307,45 @@ class Database:
                 {"child_id": child_id, "qr_value": qr_value}
             )
             
-            await db.commit()
-            return child_id
+    @staticmethod
+    async def get_session_info(session_id: str) -> Optional[Dict[str, Any]]:
+        """Get session info for confirmation page"""
+        async with AsyncSessionLocal() as db:
+            # Get session
+            session_result = await db.execute(text("""
+                SELECT cs.*, c.first_name, c.last_name, c.birth_date, f.family_name,
+                       c.allergies, c.medications, c.special_notes, c.medical_notes
+                FROM checkin_sessions cs
+                JOIN children c ON cs.child_id = c.id
+                JOIN families f ON c.family_id = f.id
+                WHERE cs.session_id = :session_id AND cs.expires_at > datetime('now') AND cs.confirmed = FALSE
+            """), {"session_id": session_id})
+            
+            session_row = session_result.fetchone()
+            if not session_row:
+                return None
+            
+            session_columns = session_result.keys()
+            session_data = dict(zip(session_columns, session_row))
+            
+            # Get all programs
+            programs = await Database.get_programs()
+            
+            # Build child info
+            child_info = {
+                "id": session_data["child_id"],
+                "first_name": session_data["first_name"],
+                "last_name": session_data["last_name"],
+                "birth_date": session_data["birth_date"],
+                "family_name": session_data["family_name"],
+                "allergies": session_data["allergies"],
+                "medications": session_data["medications"],
+                "special_notes": session_data["special_notes"],
+                "medical_notes": session_data["medical_notes"]
+            }
+            
+            return {
+                "session_id": session_id,
+                "child_info": child_info,
+                "programs": programs
+            }

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.responses import Response
 import csv
 import io
 from typing import List, Optional
@@ -185,12 +186,15 @@ async def register_new_child(request: RegisterRequest):
     This endpoint is called when a new child is registered at the check-in station.
     """
     try:
+        # Generate unique QR value
+        qr_value = f"KID-{str(uuid.uuid4())}"
+        
         # Register the child
         child_id = await Database.register_new_child(
             child_data=request.child,
             family_data=request.family,
             parent_data=request.parent,
-            qr_value=request.qr_value
+            qr_value=qr_value
         )
         
         child_name = f"{request.child['first_name']} {request.child['last_name']}"
@@ -200,7 +204,8 @@ async def register_new_child(request: RegisterRequest):
         return RegisterResponse(
             success=True,
             message=f"{child_name} registered successfully!",
-            child_id=child_id
+            child_id=child_id,
+            qr_value=qr_value
         )
         
     except Exception as e:
@@ -208,14 +213,26 @@ async def register_new_child(request: RegisterRequest):
         await Database.log_event("error", "api", f"Error registering child: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/api/programs", response_model=List[Program])
-async def get_programs():
-    """Get all available programs"""
+@app.get("/api/session/{session_id}", response_model=SessionInfo)
+async def get_session(session_id: str):
+    """Get session information for confirmation"""
     try:
-        programs = await Database.get_programs()
-        return [Program(**program) for program in programs]
+        session_info = await Database.get_session_info(session_id)
+        if not session_info:
+            raise HTTPException(status_code=404, detail="Session not found or expired")
+        
+        # Convert to Pydantic models
+        programs = [Program(**p) for p in session_info["programs"]]
+        child_info = ChildInfo(**session_info["child_info"])
+        
+        return SessionInfo(
+            session_id=session_id,
+            child_info=child_info,
+            programs=programs
+        )
+        
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting programs: {str(e)}")
+        await Database.log_event("error", "api", f"Error getting session: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/attendance/download")
@@ -260,8 +277,8 @@ async def download_attendance():
             output.seek(0)
             
             # Return CSV file
-            return StreamingResponse(
-                io.StringIO(output.getvalue()),
+            return Response(
+                output.getvalue(),
                 media_type="text/csv",
                 headers={"Content-Disposition": "attachment; filename=attendance_records.csv"}
             )
