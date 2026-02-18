@@ -1,12 +1,6 @@
-import os
-import uuid
-import secrets
-from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from fastapi.responses import StreamingResponse
+import csv
+import io
 
 from database import Database, init_database, get_db
 from models import (
@@ -215,17 +209,56 @@ async def get_programs():
         await Database.log_event("error", "api", f"Error getting programs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/api/session/{session_id}")
-async def get_session_info(session_id: str):
-    """Get session information by ID"""
+@app.get("/api/attendance/download")
+async def download_attendance():
+    """Download attendance records as CSV"""
     try:
-        session_info = await Database.get_checkin_session(session_id)
-        if not session_info:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return session_info
+        # Get all attendance records with child and program info
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT 
+                    a.id,
+                    a.checkin_time,
+                    a.created_by,
+                    c.first_name || ' ' || c.last_name as child_name,
+                    f.family_name,
+                    p.name as program_name,
+                    pr.first_name || ' ' || pr.last_name as parent_name,
+                    pr.phone as parent_phone,
+                    pr.email as parent_email
+                FROM attendance a
+                JOIN children c ON a.child_id = c.id
+                JOIN families f ON c.family_id = f.id
+                LEFT JOIN programs p ON a.program_id = p.id
+                LEFT JOIN parents pr ON f.id = pr.family_id
+                ORDER BY a.checkin_time DESC
+            """))
+            
+            rows = result.fetchall()
+            columns = result.keys()
+            
+            # Create CSV in memory
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write header
+            writer.writerow(columns)
+            
+            # Write data
+            for row in rows:
+                writer.writerow(row)
+            
+            output.seek(0)
+            
+            # Return CSV file
+            return StreamingResponse(
+                io.StringIO(output.getvalue()),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=attendance_records.csv"}
+            )
+            
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting session: {str(e)}", 
-                               details=f"Session: {session_id}")
+        await Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/scanner")

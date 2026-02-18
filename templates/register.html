@@ -539,7 +539,13 @@
             document.getElementById('success-message').style.display = 'block';
             
             const childName = document.getElementById('child-first-name').value + ' ' + document.getElementById('child-last-name').value;
-            document.getElementById('success-text').textContent = `${childName} registered successfully!`;
+            const qrValue = document.getElementById('qr-value').value;
+            
+            document.getElementById('success-text').innerHTML = `
+                ${childName} registered successfully!<br><br>
+                <strong>QR Code:</strong> ${qrValue}<br><br>
+                <small>Use this QR code to test check-in at the scanner.</small>
+            `;
         }
 
         function showError(message) {
