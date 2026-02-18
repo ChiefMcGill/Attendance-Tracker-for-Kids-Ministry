@@ -1,69 +1,72 @@
 FROM nginx:alpine
 
-# Create custom nginx configuration
-RUN echo '# Nginx configuration for Kids Ministry Check-in System
-# Reverse proxy with SSL termination
+# Remove default nginx.conf
+RUN rm -f /etc/nginx/nginx.conf
 
-events {
-    worker_connections 1024;
-}
-
-http {
-    upstream app {
-        server app:8000;
-    }
-
-    server {
-        listen 80;
-        server_name checkin.solidground.co.za;
-        return 301 https://$server_name$request_uri;
-    }
-
-    server {
-        listen 443 ssl http2;
-        server_name checkin.solidground.co.za;
-
-        # SSL configuration
-        ssl_certificate /etc/ssl/certs/checkin.solidground.co.za.crt;
-        ssl_certificate_key /etc/ssl/certs/checkin.solidground.co.za.key;
-
-        # SSL security settings
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
-        ssl_prefer_server_ciphers off;
-
-        # Security headers
-        add_header X-Frame-Options DENY;
-        add_header X-Content-Type-Options nosniff;
-        add_header X-XSS-Protection "1; mode=block";
-
-        # Proxy settings
-        location / {
-            proxy_pass http://app;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-
-            # WebSocket support (for future real-time features)
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-
-            # Timeout settings
-            proxy_connect_timeout 60s;
-            proxy_send_timeout 60s;
-            proxy_read_timeout 60s;
-        }
-
-        # Static files
-        location /static/ {
-            proxy_pass http://app;
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-        }
-    }
-}' > /etc/nginx/nginx.conf
+# Create custom nginx configuration line by line
+RUN echo '# Nginx configuration for Kids Ministry Check-in System' > /etc/nginx/nginx.conf
+RUN echo '# Reverse proxy with SSL termination' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo 'events {' >> /etc/nginx/nginx.conf
+RUN echo '    worker_connections 1024;' >> /etc/nginx/nginx.conf
+RUN echo '}' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo 'http {' >> /etc/nginx/nginx.conf
+RUN echo '    upstream app {' >> /etc/nginx/nginx.conf
+RUN echo '        server app:8000;' >> /etc/nginx/nginx.conf
+RUN echo '    }' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '    server {' >> /etc/nginx/nginx.conf
+RUN echo '        listen 80;' >> /etc/nginx/nginx.conf
+RUN echo '        server_name checkin.solidground.co.za;' >> /etc/nginx/nginx.conf
+RUN echo '        return 301 https://$server_name$request_uri;' >> /etc/nginx/nginx.conf
+RUN echo '    }' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '    server {' >> /etc/nginx/nginx.conf
+RUN echo '        listen 443 ssl http2;' >> /etc/nginx/nginx.conf
+RUN echo '        server_name checkin.solidground.co.za;' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '        # SSL configuration' >> /etc/nginx/nginx.conf
+RUN echo '        ssl_certificate /etc/ssl/certs/checkin.solidground.co.za.crt;' >> /etc/nginx/nginx.conf
+RUN echo '        ssl_certificate_key /etc/ssl/certs/checkin.solidground.co.za.key;' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '        # SSL security settings' >> /etc/nginx/nginx.conf
+RUN echo '        ssl_protocols TLSv1.2 TLSv1.3;' >> /etc/nginx/nginx.conf
+RUN echo '        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;' >> /etc/nginx/nginx.conf
+RUN echo '        ssl_prefer_server_ciphers off;' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '        # Security headers' >> /etc/nginx/nginx.conf
+RUN echo '        add_header X-Frame-Options DENY;' >> /etc/nginx/nginx.conf
+RUN echo '        add_header X-Content-Type-Options nosniff;' >> /etc/nginx/nginx.conf
+RUN echo '        add_header X-XSS-Protection "1; mode=block";' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '        # Proxy settings' >> /etc/nginx/nginx.conf
+RUN echo '        location / {' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_pass http://app;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_set_header Host $host;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_set_header X-Real-IP $remote_addr;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_set_header X-Forwarded-Proto $scheme;' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '            # WebSocket support (for future real-time features)' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_http_version 1.1;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_set_header Upgrade $http_upgrade;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_set_header Connection "upgrade";' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '            # Timeout settings' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_connect_timeout 60s;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_send_timeout 60s;' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_read_timeout 60s;' >> /etc/nginx/nginx.conf
+RUN echo '        }' >> /etc/nginx/nginx.conf
+RUN echo '' >> /etc/nginx/nginx.conf
+RUN echo '        # Static files' >> /etc/nginx/nginx.conf
+RUN echo '        location /static/ {' >> /etc/nginx/nginx.conf
+RUN echo '            proxy_pass http://app;' >> /etc/nginx/nginx.conf
+RUN echo '            expires 1y;' >> /etc/nginx/nginx.conf
+RUN echo '            add_header Cache-Control "public, immutable";' >> /etc/nginx/nginx.conf
+RUN echo '        }' >> /etc/nginx/nginx.conf
+RUN echo '    }' >> /etc/nginx/nginx.conf
+RUN echo '}' >> /etc/nginx/nginx.conf
 
 # Copy SSL certificates
 COPY ssl/ /etc/ssl/certs/
