@@ -12,7 +12,7 @@ import csv
 import io
 from typing import List, Optional
 
-from database import Database, init_database, get_db
+from database import Database, init_database, get_db, AsyncSessionLocal
 from models import (
     ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo
