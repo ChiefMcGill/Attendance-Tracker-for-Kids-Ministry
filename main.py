@@ -201,6 +201,7 @@ async def register_new_child(request: RegisterRequest):
         )
         
     except Exception as e:
+        print(f"Registration error: {str(e)}")  # Debug print
         await Database.log_event("error", "api", f"Error registering child: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
