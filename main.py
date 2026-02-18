@@ -272,7 +272,7 @@ async def download_attendance():
             
             # Write data
             for row in rows:
-                writer.writerow(row)
+                writer.writerow([str(cell) for cell in row])
             
             output.seek(0)
             
