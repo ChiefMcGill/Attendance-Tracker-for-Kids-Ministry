@@ -49,27 +49,19 @@ async def init_database():
     
     # Execute schema using sync connection - split into individual statements
     with sync_engine.connect() as conn:
-        # Split SQL into individual statements
-        statements = []
-        current_statement = ""
+        # Remove comments (both -- and /* */ style)
+        import re
+        # Remove -- comments
+        schema_sql = re.sub(r'--.*$', '', schema_sql, flags=re.MULTILINE)
+        # Remove /* */ comments
+        schema_sql = re.sub(r'/\*.*?\*/', '', schema_sql, flags=re.DOTALL)
         
-        # Split by semicolon but preserve semicolons within statements
-        lines = schema_sql.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line.startswith('--') or line == '':
-                continue  # Skip comments and empty lines
-            current_statement += line + ' '
-            if ';' in line:
-                # Found end of statement
-                statement = current_statement.strip()
-                if statement:
-                    statements.append(statement)
-                current_statement = ""
+        # Split by semicolon and filter out empty statements
+        statements = [stmt.strip() for stmt in schema_sql.split(';') if stmt.strip()]
         
         # Execute each statement individually
         for statement in statements:
-            if statement.strip():  # Skip empty statements
+            if statement:  # Skip empty statements
                 conn.execute(text(statement))
         
         conn.commit()
