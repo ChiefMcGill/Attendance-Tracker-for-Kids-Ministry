@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   app:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -12,10 +14,31 @@ services:
       - DB_PATH=/data/attendance.db
       - STATION_TOKENS=entrance-a,entrance-b,checkout-a
       - WORKER_POLL_INTERVAL=2
+      - SECRET_KEY=kids-ministry-default-secret-change-in-production
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: >
+      sh -c "
+        echo 'Starting Kids Ministry Check-in System...' &&
+        python -c 'import asyncio; from database import init_database; asyncio.run(init_database())' &&
+        echo 'Database initialized.' &&
+        python seed_data.py &&
+        echo 'Sample data created.' &&
+        echo 'Starting web server...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000
+      "
 
   worker:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     command: python worker.py
     volumes:
       - ./data:/data
@@ -24,6 +47,8 @@ services:
       - DB_PATH=/data/attendance.db
       - PLAYWRIGHT_USER_DATA_DIR=/home/pi/.whatsapp_session
       - WORKER_POLL_INTERVAL=2
+      - SECRET_KEY=kids-ministry-default-secret-change-in-production
     restart: unless-stopped
     depends_on:
-      - app
+      app:
+        condition: service_healthy

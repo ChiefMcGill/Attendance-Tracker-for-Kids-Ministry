@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -17,8 +18,11 @@ COPY . .
 # Create data directory for SQLite database
 RUN mkdir -p /data
 
+# Create WhatsApp session directory
+RUN mkdir -p /home/pi/.whatsapp_session
+
 # Expose port
 EXPOSE 8000
 
-# Run the application
+# Default command (overridden by docker-compose)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
