@@ -5,8 +5,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    # Remove external port exposure - nginx handles this
     volumes:
       - ./data:/data
       - ./static:/app/static
@@ -34,6 +33,21 @@ services:
         echo 'Starting web server...' &&
         uvicorn main:app --host 0.0.0.0 --port 8000
       "
+    depends_on:
+      - nginx  # Ensure nginx starts first
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - ./ssl:/etc/ssl/private:ro
+    restart: unless-stopped
+    depends_on:
+      - app
 
   worker:
     build: 
