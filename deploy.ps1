@@ -1,0 +1,100 @@
+# Kids Ministry Deployment Script
+# Run this on your Windows Server 2022 to deploy the system automatically
+
+# Create deployment directory
+New-Item -ItemType Directory -Force -Path "C:\KidsMinistryDeploy" | Out-Null
+Set-Location "C:\KidsMinistryDeploy"
+
+# Create docker-compose.yml
+@"
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./static:/app/static
+    environment:
+      - DB_PATH=/data/attendance.db
+      - STATION_TOKENS=entrance-a,entrance-b,checkout-a
+      - WORKER_POLL_INTERVAL=2
+      - SECRET_KEY=kids-ministry-default-secret-change-in-production
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: >
+      sh -c "
+        echo 'Starting Kids Ministry Check-in System...' &&
+        python -c 'import asyncio; from database import init_database; asyncio.run(init_database())' &&
+        echo 'Database initialized.' &&
+        python seed_data.py &&
+        echo 'Sample data created.' &&
+        echo 'Starting web server...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000
+      "
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python worker.py
+    volumes:
+      - ./data:/data
+      - ./whatsapp_session:/home/pi/.whatsapp_session
+    environment:
+      - DB_PATH=/data/attendance.db
+      - PLAYWRIGHT_USER_DATA_DIR=/home/pi/.whatsapp_session
+      - WORKER_POLL_INTERVAL=2
+      - SECRET_KEY=kids-ministry-default-secret-change-in-production
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+"@ | Out-File -FilePath "docker-compose.yml" -Encoding UTF8
+
+# Create Dockerfile
+@"
+FROM python:3.11-slim
+
+# Install system dependencies including git
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Clone the repository
+RUN git clone https://github.com/ChiefMcGill/Attendance-Tracker-for-Kids-Ministry.git .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create necessary directories
+RUN mkdir -p /data /home/pi/.whatsapp_session
+
+# Expose port
+EXPOSE 8000
+
+# Default command (overridden by docker-compose)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+"@ | Out-File -FilePath "Dockerfile" -Encoding UTF8
+
+Write-Host "Deployment files created successfully!" -ForegroundColor Green
+Write-Host ""
+Write-Host "To start the system, run:" -ForegroundColor Yellow
+Write-Host "docker-compose up --build" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Then visit: http://localhost:8000" -ForegroundColor Yellow

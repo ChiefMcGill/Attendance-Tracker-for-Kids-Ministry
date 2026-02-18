@@ -1,38 +1,118 @@
-# 🚀 One-Command Deployment Guide
+# 🚀 GitHub-Based Deployment Guide
 
 ## Prerequisites
 - Docker Desktop installed on Windows Server 2022
-- All project files copied to server
+- Internet connection for GitHub access
 
-## Single Command Deployment
+## Zero-File Deployment
 
-### Step 1: Copy Files
-Copy the entire project folder to your Windows Server:
-```
-C:\KidsMinistryCheckin\
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-├── main.py
-├── database.py
-├── models.py
-├── worker.py
-├── schema.sql
-├── seed_data.py
-├── templates\
-└── static\
-```
-
-### Step 2: Run Single Command
-Open PowerShell as Administrator and run:
+### Step 1: Create Deployment Folder
+Create a folder on your Windows Server:
 ```powershell
-cd C:\KidsMinistryCheckin
+mkdir C:\KidsMinistryDeploy
+cd C:\KidsMinistryDeploy
+```
+
+### Step 2: Create Docker Compose File
+Create a new file called `docker-compose.yml` with this content:
+
+```yaml
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./static:/app/static
+    environment:
+      - DB_PATH=/data/attendance.db
+      - STATION_TOKENS=entrance-a,entrance-b,checkout-a
+      - WORKER_POLL_INTERVAL=2
+      - SECRET_KEY=kids-ministry-default-secret-change-in-production
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: >
+      sh -c "
+        echo 'Starting Kids Ministry Check-in System...' &&
+        python -c 'import asyncio; from database import init_database; asyncio.run(init_database())' &&
+        echo 'Database initialized.' &&
+        python seed_data.py &&
+        echo 'Sample data created.' &&
+        echo 'Starting web server...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000
+      "
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python worker.py
+    volumes:
+      - ./data:/data
+      - ./whatsapp_session:/home/pi/.whatsapp_session
+    environment:
+      - DB_PATH=/data/attendance.db
+      - PLAYWRIGHT_USER_DATA_DIR=/home/pi/.whatsapp_session
+      - WORKER_POLL_INTERVAL=2
+      - SECRET_KEY=kids-ministry-default-secret-change-in-production
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+```
+
+### Step 3: Create Dockerfile
+Create a new file called `Dockerfile` with this content:
+
+```dockerfile
+FROM python:3.11-slim
+
+# Install system dependencies including git
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Clone the repository
+RUN git clone https://github.com/ChiefMcGill/Attendance-Tracker-for-Kids-Ministry.git .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create necessary directories
+RUN mkdir -p /data /home/pi/.whatsapp_session
+
+# Expose port
+EXPOSE 8000
+
+# Default command (overridden by docker-compose)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### Step 4: Run Single Command
+```powershell
 docker-compose up --build
 ```
 
 **That's it!** 🎉
 
 The system will automatically:
+- ✅ Clone the latest code from GitHub
 - ✅ Build the Docker containers
 - ✅ Initialize the database
 - ✅ Create sample data
@@ -40,14 +120,14 @@ The system will automatically:
 - ✅ Start the background worker
 - ✅ Run health checks
 
-### Step 3: Access the System
+### Step 5: Access the System
 Wait 2-3 minutes for initialization, then open:
 - **Main Interface**: `http://localhost:8000`
 - **Scanner**: `http://localhost:8000/scanner`
 - **Registration**: `http://localhost:8000/register`
 - **Health Check**: `http://localhost:8000/health`
 
-### Step 4: Test with Sample QR Codes
+### Step 6: Test with Sample QR Codes
 Use these test QR codes:
 - `KID-EMMA-JOHNSON-001`
 - `KID-NOAH-JOHNSON-002`
@@ -74,9 +154,11 @@ Then access from tablets/phones:
 docker-compose down
 ```
 
-**Start again:**
+**Update to latest version:**
 ```powershell
-docker-compose up -d
+docker-compose down
+docker rmi $(docker images -q)  # Remove old images
+docker-compose up --build      # Pull latest from GitHub
 ```
 
 **View logs:**
@@ -100,6 +182,15 @@ netstat -ano | findstr :8000
 taskkill /PID [PROCESS-ID] /F
 ```
 
+**If GitHub clone fails:**
+```powershell
+# Check internet connection
+ping github.com
+
+# Try manual clone
+git clone https://github.com/ChiefMcGill/Attendance-Tracker-for-Kids-Ministry.git
+```
+
 **If containers won't start:**
 ```powershell
 # Clean rebuild
@@ -111,6 +202,7 @@ docker-compose up --build
 **If you need to reset everything:**
 ```powershell
 docker-compose down -v
+Remove-Item .\data\* -Recurse -Force
 docker-compose up --build
 ```
 
@@ -135,14 +227,10 @@ The automated setup creates:
 
 ---
 
-## 🎯 Ready for Production
+## 🎯 Always Up-to-Date
 
-For production use, consider:
-1. Change default passwords in docker-compose.yml
-2. Set up HTTPS/SSL
-3. Configure regular database backups
-4. Monitor container health
+Since this pulls directly from GitHub, you'll always get the latest version with bug fixes and new features!
 
 ---
 
-**That's it! Your Kids Ministry Check-in system is now running with a single command!** 🎉
+**That's it! Your Kids Ministry Check-in system is now running from GitHub with a single command!** 🎉

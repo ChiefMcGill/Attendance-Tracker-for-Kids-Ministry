@@ -1,25 +1,22 @@
 FROM python:3.11-slim
 
-WORKDIR /app
-
-# Install system dependencies
+# Install system dependencies including git
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
+WORKDIR /app
+
+# Clone the repository
+RUN git clone https://github.com/ChiefMcGill/Attendance-Tracker-for-Kids-Ministry.git .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
-
-# Create data directory for SQLite database
-RUN mkdir -p /data
-
-# Create WhatsApp session directory
-RUN mkdir -p /home/pi/.whatsapp_session
+# Create necessary directories
+RUN mkdir -p /data /home/pi/.whatsapp_session
 
 # Expose port
 EXPOSE 8000
