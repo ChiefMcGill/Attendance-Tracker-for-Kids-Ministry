@@ -182,11 +182,6 @@ async def register_new_child(request: RegisterRequest):
     This endpoint is called when a new child is registered at the check-in station.
     """
     try:
-        # Validate station
-        if not validate_station(request.station_id):
-            # Note: station_id is not in RegisterRequest, so we'll skip this validation for now
-            pass
-        
         # Register the child
         child_id = await Database.register_new_child(
             child_data=request.child,

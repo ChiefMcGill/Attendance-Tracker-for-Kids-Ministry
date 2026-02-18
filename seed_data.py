@@ -55,6 +55,12 @@ async def create_sample_data():
     
     async with AsyncSessionLocal() as db:
         try:
+            # Check if sample data already exists
+            existing_families = await db.execute(text("SELECT COUNT(*) FROM families"))
+            if existing_families.scalar() > 0:
+                print("Sample data already exists, skipping creation.")
+                return
+            
             # Create families
             family_ids = []
             for family_data in SAMPLE_FAMILIES:
