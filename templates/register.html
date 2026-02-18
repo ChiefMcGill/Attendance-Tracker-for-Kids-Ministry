@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register New Child</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .register-container {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+            max-height: calc(100vh - 8rem);
+            overflow-y: auto;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+        }
+
+        .form-section h2 {
+            color: #333;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .medical-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .medical-section h3 {
+            color: #dc3545;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .medical-section h3::before {
+            content: "⚕️";
+            margin-right: 0.5rem;
+        }
+
+        .qr-section {
+            background: #e8f5e8;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .qr-section h3 {
+            color: #28a745;
+            margin-bottom: 1rem;
+        }
+
+        .qr-input {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+
+        .qr-input input {
+            max-width: 300px;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            justify-content: flex-end;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .success-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 1rem;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        @media (max-width: 768px) {
+            .register-container {
+                padding: 1rem;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .qr-input {
+                flex-direction: column;
+            }
+            
+            .qr-input input {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Register New Child</h1>
+        <p>Add a new child to the check-in system</p>
+    </div>
+
+    <div class="main-container">
+        <div class="register-container">
+            <form id="registration-form">
+                <!-- Family Information -->
+                <div class="form-section">
+                    <h2>Family Information</h2>
+                    <div class="form-group">
+                        <label for="family-name">Family Name <span class="required">*</span></label>
+                        <input type="text" id="family-name" name="family_name" required>
+                    </div>
+                </div>
+
+                <!-- Parent/Guardian Information -->
+                <div class="form-section">
+                    <h2>Parent/Guardian Information</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="parent-first-name">First Name <span class="required">*</span></label>
+                            <input type="text" id="parent-first-name" name="parent_first_name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="parent-last-name">Last Name <span class="required">*</span></label>
+                            <input type="text" id="parent-last-name" name="parent_last_name" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="parent-phone">Phone Number <span class="required">*</span></label>
+                            <input type="tel" id="parent-phone" name="parent_phone" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="parent-email">Email</label>
+                            <input type="email" id="parent-email" name="parent_email">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="parent-relationship">Relationship <span class="required">*</span></label>
+                        <select id="parent-relationship" name="parent_relationship" required>
+                            <option value="">Select relationship...</option>
+                            <option value="mother">Mother</option>
+                            <option value="father">Father</option>
+                            <option value="guardian">Guardian</option>
+                            <option value="grandparent">Grandparent</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Child Information -->
+                <div class="form-section">
+                    <h2>Child Information</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="child-first-name">First Name <span class="required">*</span></label>
+                            <input type="text" id="child-first-name" name="child_first_name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="child-last-name">Last Name <span class="required">*</span></label>
+                            <input type="text" id="child-last-name" name="child_last_name" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="child-birth-date">Birth Date <span class="required">*</span></label>
+                        <input type="date" id="child-birth-date" name="child_birth_date" required>
+                    </div>
+                </div>
+
+                <!-- Medical Information -->
+                <div class="medical-section">
+                    <h3>Medical Information</h3>
+                    <div class="form-group">
+                        <label for="allergies">Allergies</label>
+                        <textarea id="allergies" name="allergies" placeholder="List any allergies (food, environmental, etc.)"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="medications">Medications</label>
+                        <textarea id="medications" name="medications" placeholder="List any current medications"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="medical-notes">Medical Notes</label>
+                        <textarea id="medical-notes" name="medical_notes" placeholder="Any other relevant medical information"></textarea>
+                    </div>
+                </div>
+
+                <!-- Special Notes -->
+                <div class="form-section">
+                    <h2>Special Notes</h2>
+                    <div class="form-group">
+                        <label for="special-notes">Special Instructions</label>
+                        <textarea id="special-notes" name="special_notes" placeholder="Any special instructions for volunteers (behavioral needs, preferences, etc.)"></textarea>
+                    </div>
+                </div>
+
+                <!-- QR Code Assignment -->
+                <div class="qr-section">
+                    <h3>QR Code Assignment</h3>
+                    <p>Assign a QR code to this child for check-in</p>
+                    <div class="qr-input">
+                        <input type="text" id="qr-value" name="qr_value" placeholder="Enter QR code value" required>
+                        <button type="button" class="btn btn-secondary" onclick="generateQR()">Generate QR</button>
+                    </div>
+                </div>
+
+                <!-- Program Selection -->
+                <div class="form-section">
+                    <h2>Program Selection</h2>
+                    <div class="form-group">
+                        <label for="program">Select Program <span class="required">*</span></label>
+                        <select id="program" name="program_id" required>
+                            <option value="">Select program...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="cancelRegistration()">Cancel</button>
+                    <button type="submit" class="btn btn-success">Register Child</button>
+                </div>
+
+                <!-- Loading State -->
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Registering child...</p>
+                </div>
+
+                <!-- Success State -->
+                <div class="success-message" id="success-message">
+                    <div class="success-icon">✅</div>
+                    <div class="success-text" id="success-text">Registration successful!</div>
+                    <button class="btn btn-primary" onclick="goToScanner()">Go to Scanner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let programs = [];
+
+        function initializePage() {
+            // Load programs
+            loadPrograms();
+            
+            // Set up form submission
+            document.getElementById('registration-form').addEventListener('submit', handleRegistration);
+            
+            // Generate initial QR code
+            generateQR();
+        }
+
+        function loadPrograms() {
+            fetch('/api/programs')
+                .then(response => response.json())
+                .then(data => {
+                    programs = data;
+                    populateProgramSelect();
+                })
+                .catch(error => {
+                    console.error('Error loading programs:', error);
+                });
+        }
+
+        function populateProgramSelect() {
+            const select = document.getElementById('program');
+            programs.forEach(program => {
+                const option = document.createElement('option');
+                option.value = program.id;
+                option.textContent = program.name;
+                select.appendChild(option);
+            });
+        }
+
+        function generateQR() {
+            // Generate a random QR code value
+            const qrValue = 'KID-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+            document.getElementById('qr-value').value = qrValue;
+        }
+
+        function handleRegistration(event) {
+            event.preventDefault();
+            
+            // Validate form
+            if (!validateForm()) {
+                return;
+            }
+
+            // Show loading
+            document.querySelector('.register-container > form > div:not(.loading):not(.success-message)').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+
+            // Collect form data
+            const formData = new FormData(event.target);
+            
+            const registrationData = {
+                child: {
+                    first_name: formData.get('child_first_name'),
+                    last_name: formData.get('child_last_name'),
+                    birth_date: formData.get('child_birth_date'),
+                    allergies: formData.get('allergies') || null,
+                    medications: formData.get('medications') || null,
+                    special_notes: formData.get('special-notes') || null,
+                    medical_notes: formData.get('medical-notes') || null
+                },
+                family: {
+                    family_name: formData.get('family_name')
+                },
+                parent: {
+                    first_name: formData.get('parent_first_name'),
+                    last_name: formData.get('parent_last_name'),
+                    phone: formData.get('parent_phone'),
+                    email: formData.get('parent_email') || null,
+                    relationship: formData.get('parent_relationship')
+                },
+                qr_value: formData.get('qr_value'),
+                program_id: parseInt(formData.get('program_id'))
+            };
+
+            // Send registration request
+            fetch('/api/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(registrationData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showSuccess(data.child_id);
+                } else {
+                    showError(data.message || 'Registration failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError('Connection error. Please try again.');
+            });
+        }
+
+        function validateForm() {
+            const requiredFields = [
+                'family-name',
+                'parent-first-name', 'parent-last-name', 'parent-phone', 'parent-relationship',
+                'child-first-name', 'child-last-name', 'child-birth-date',
+                'qr-value', 'program'
+            ];
+
+            for (const fieldId of requiredFields) {
+                const field = document.getElementById(fieldId);
+                if (!field.value.trim()) {
+                    field.focus();
+                    alert(`Please fill in the required field: ${field.previousElementSibling.textContent.replace(' *', '')}`);
+                    return false;
+                }
+            }
+
+            // Validate phone number (basic validation)
+            const phone = document.getElementById('parent-phone').value;
+            if (!/^[\d\s\-\+\(\)]+$/.test(phone) || phone.length < 10) {
+                alert('Please enter a valid phone number');
+                return false;
+            }
+
+            return true;
+        }
+
+        function showSuccess(childId) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('success-message').style.display = 'block';
+            
+            const childName = document.getElementById('child-first-name').value + ' ' + document.getElementById('child-last-name').value;
+            document.getElementById('success-text').textContent = `${childName} registered successfully!`;
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            alert(message); // Simple error handling for MVP
+            
+            // Show form again
+            document.querySelector('.register-container > form > div:not(.loading):not(.success-message)').style.display = 'block';
+        }
+
+        function cancelRegistration() {
+            if (confirm('Are you sure you want to cancel this registration? All data will be lost.')) {
+                window.location.href = '/scanner';
+            }
+        }
+
+        function goToScanner() {
+            window.location.href = '/scanner';
+        }
+
+        // Initialize page on load
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>
