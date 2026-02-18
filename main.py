@@ -11,6 +11,12 @@ import csv
 import io
 from typing import List, Optional
 
+from database import Database, init_database, get_db
+from models import (
+    ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
+    RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo
+)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Kids Ministry Check-in System",
