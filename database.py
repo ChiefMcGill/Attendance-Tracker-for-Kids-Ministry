@@ -349,3 +349,111 @@ class Database:
                 "child_info": child_info,
                 "programs": programs
             }
+    
+    @staticmethod
+    async def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+        """Get volunteer by username"""
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT id, username, password_hash, first_name, last_name, role, totp_secret, enabled_2fa, active
+                FROM volunteers
+                WHERE username = :username AND active = TRUE
+            """), {"username": username})
+            
+            row = result.fetchone()
+            if row:
+                columns = result.keys()
+                return dict(zip(columns, row))
+            return None
+    
+    @staticmethod
+    async def create_volunteer(username: str, password_hash: str, first_name: str, last_name: str, role: str = "volunteer") -> int:
+        """Create a new volunteer"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    INSERT INTO volunteers (username, password_hash, first_name, last_name, role)
+                    VALUES (:username, :password_hash, :first_name, :last_name, :role)
+                """),
+                {
+                    "username": username,
+                    "password_hash": password_hash,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "role": role
+                }
+            )
+            await db.commit()
+            return (await db.execute(text("SELECT last_insert_rowid()"))).scalar()
+    
+    @staticmethod
+    async def get_all_volunteers() -> List[Dict[str, Any]]:
+        """Get all volunteers"""
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT id, username, first_name, last_name, role, enabled_2fa, active
+                FROM volunteers
+                ORDER BY username
+            """))
+            rows = result.fetchall()
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    @staticmethod
+    async def update_volunteer_2fa(user_id: int, totp_secret: str, enabled: bool):
+        """Update 2FA for volunteer"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    UPDATE volunteers
+                    SET totp_secret = :totp_secret, enabled_2fa = :enabled
+                    WHERE id = :user_id
+                """),
+                {"user_id": user_id, "totp_secret": totp_secret, "enabled": enabled}
+            )
+            await db.commit()
+    
+    @staticmethod
+    async def get_child_qr(child_id: int) -> Optional[str]:
+        """Get QR value for child"""
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT qr_value FROM qr_codes
+                WHERE child_id = :child_id AND active = TRUE
+            """), {"child_id": child_id})
+            row = result.fetchone()
+            return row[0] if row else None
+    
+    @staticmethod
+    async def search_children(query: str) -> List[Dict[str, Any]]:
+        """Search children by first or last name"""
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT c.id, c.first_name, c.last_name, f.family_name
+                FROM children c
+                JOIN families f ON c.family_id = f.id
+                WHERE c.active = TRUE AND (c.first_name LIKE :query OR c.last_name LIKE :query)
+                ORDER BY c.last_name, c.first_name
+                LIMIT 10
+            """), {"query": f"%{query}%"})
+            rows = result.fetchall()
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in rows]
+    
+    @staticmethod
+    async def create_attendance(child_id: int, program_id: int, station_id: str, created_by: str):
+        """Create attendance record directly"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    INSERT INTO attendance (child_id, program_id, station_id, checkin_time, created_by)
+                    VALUES (:child_id, :program_id, :station_id, datetime('now'), :created_by)
+                """),
+                {
+                    "child_id": child_id,
+                    "program_id": program_id,
+                    "station_id": station_id,
+                    "created_by": created_by
+                }
+            )
+            await db.commit()

@@ -32,6 +32,22 @@
             margin-bottom: 0.5rem;
         }
 
+        .logout-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         .main-container {
             flex: 1;
             display: flex;
@@ -264,8 +280,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>Register New Child</h1>
-        <p>Add a new child to the check-in system</p>
+        <h1>Kids Ministry Check-in</h1>
+        <p>Register New Child</p>
+        <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
 
     <div class="main-container">

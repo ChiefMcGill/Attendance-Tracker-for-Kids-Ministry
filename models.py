@@ -15,10 +15,22 @@ class CheckinRequest(BaseModel):
     created_by: str
 
 class RegisterRequest(BaseModel):
-    child: dict
-    family: dict
-    parent: dict
+    parent_first_name: str
+    parent_last_name: str
+    parent_phone: str
+    parent_email: str
+    parent_relationship: str
+    family_name: str
+    child_first_name: str
+    child_last_name: str
+    child_birth_year: int
+    child_birth_month: int
+    child_birth_day: int
+    child_medical_notes: Optional[str] = None
+    child_special_notes: Optional[str] = None
     program_id: int
+    station_id: str = "entrance-a"
+    device_id: str = "registration-device"
 
 # Response models
 class ScanResponse(BaseModel):
@@ -63,3 +75,21 @@ class SessionInfo(BaseModel):
     session_id: str
     child_info: ChildInfo
     programs: List[Program]
+
+# Auth models
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+    otp: Optional[str] = None
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+    token: Optional[str] = None
+    requires_2fa: bool = False
+
+class DirectCheckinRequest(BaseModel):
+    child_id: int
+    program_id: int
+    station_id: str
+    device_id: str
