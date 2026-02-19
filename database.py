@@ -17,7 +17,7 @@ DB_PATH = os.getenv("DB_PATH", "/data/attendance.db")
 Base = declarative_base()
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
