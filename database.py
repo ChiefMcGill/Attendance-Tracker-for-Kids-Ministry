@@ -619,5 +619,5 @@ class Database:
     @staticmethod
     async def log_event(level: str, source: str, message: str, details: str = ""):
         async with AsyncSessionLocal() as db:
-            await db.execute(text("INSERT INTO logs (level, source, message, details) VALUES (?, ?, ?, ?)"), (level, source, message, details))
+            await db.execute(text("INSERT INTO logs (level, source, message, details) VALUES (:level, :source, :message, :details)"), {"level": level, "source": source, "message": message, "details": details})
             await db.commit()

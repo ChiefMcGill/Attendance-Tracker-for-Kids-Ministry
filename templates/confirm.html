@@ -133,31 +133,6 @@
             opacity: 0.8;
         }
 
-        .volunteer-input {
-            margin: 2rem 0;
-        }
-
-        .volunteer-input label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 500;
-            color: #333;
-        }
-
-        .volunteer-input input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: border-color 0.3s;
-        }
-
-        .volunteer-input input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
         .action-buttons {
             display: flex;
             gap: 1rem;
@@ -281,12 +256,6 @@
                 </div>
             </div>
 
-            <!-- Volunteer Input -->
-            <div class="volunteer-input">
-                <label for="volunteer-name">Volunteer Name</label>
-                <input type="text" id="volunteer-name" placeholder="Enter your name" required>
-            </div>
-
             <!-- Action Buttons -->
             <div class="action-buttons">
                 <button class="btn btn-secondary" onclick="cancelCheckin()">Cancel</button>
@@ -309,6 +278,11 @@
     </div>
 
     <script>
+        function getAuthHeaders() {
+            const token = localStorage.getItem('authToken');
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
         let sessionData = {
             sessionId: null,
             childInfo: null,
@@ -434,13 +408,6 @@
         }
 
         function confirmCheckin() {
-            const volunteerName = document.getElementById('volunteer-name').value.trim();
-            
-            if (!volunteerName) {
-                showError('Please enter your name');
-                return;
-            }
-            
             if (!sessionData.selectedProgram) {
                 showError('Please select a program');
                 return;
@@ -459,8 +426,7 @@
                 body: JSON.stringify({
                     session_id: sessionData.sessionId,
                     station_id: sessionData.stationId,
-                    device_id: sessionData.deviceId,
-                    created_by: volunteerName
+                    device_id: sessionData.deviceId
                 })
             })
             .then(response => response.json())

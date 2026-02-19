@@ -377,19 +377,15 @@ async def direct_checkin(request: DirectCheckinRequest, current_user: dict = Dep
     """Direct check-in from scanner search - requires auth"""
     print(f"Direct checkin request: {request.dict()}")
     try:
-        # Create attendance
-        try:
-            attendance_id = await Database.create_attendance(
-                child_id=request.child_id,
-                program_id=request.program_id,
-                station_id=request.station_id,
-                created_by=current_user['username']
-            )
-            print(f"Attendance created with ID: {attendance_id}")
-        except Exception as e:
-            print(f"Error in create_attendance: {e}")
-            raise
-        
+        # Create attendance record
+        created_by = f"{current_user['first_name']} {current_user['last_name']}".strip() or current_user['username']
+        attendance_id = await Database.create_attendance(
+            child_id=request.child_id,
+            program_id=request.program_id,
+            station_id=request.station_id,
+            created_by=created_by
+        )
+        print(f"Attendance created with ID: {attendance_id}")
         # Get child name
         try:
             async with AsyncSessionLocal() as db:
@@ -817,7 +813,14 @@ async def delete_volunteer(volunteer_id: int, current_user: dict = Depends(get_c
         await Database.log_event("error", "api", f"Error deleting volunteer: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/api/programs/all")
+@app.get("/api/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return {
+        "username": current_user['username'],
+        "first_name": current_user.get('first_name', ''),
+        "last_name": current_user.get('last_name', ''),
+        "role": current_user['role']
+    }
 async def get_all_programs(current_user: dict = Depends(get_current_user)):
     """Get all programs including inactive ones - Admin only"""
     if current_user['role'] != 'admin':

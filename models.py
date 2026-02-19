@@ -12,7 +12,7 @@ class CheckinRequest(BaseModel):
     session_id: str
     station_id: str
     device_id: str
-    created_by: str
+    created_by: Optional[str] = None
 
 class RegisterRequest(BaseModel):
     parent_first_name: str
