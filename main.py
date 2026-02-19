@@ -71,10 +71,6 @@ def validate_station(station_id: str) -> bool:
     return station_id in STATION_TOKENS
 
 # Auth utilities
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
