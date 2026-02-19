@@ -8,6 +8,12 @@ class ScanRequest(BaseModel):
     station_id: str
     device_id: str
 
+class CheckinRequest(BaseModel):
+    session_id: str
+    station_id: str
+    device_id: str
+    created_by: Optional[str] = None
+
 class Setup2FARequest(BaseModel):
     otp: str
     totp_secret: str
@@ -101,6 +107,7 @@ class AddVolunteerRequest(BaseModel):
     username: str
     first_name: str = Field(alias="firstName")
     last_name: str = Field(alias="lastName")
+    email: Optional[str] = None
     role: Optional[str] = "volunteer"
     
     class Config:
