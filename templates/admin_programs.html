@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Programs - Kids Ministry Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .programs-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .programs-table th,
+        .programs-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .programs-table th {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+
+        .status-active {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .status-inactive {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .message {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .programs-table {
+                font-size: 0.9rem;
+            }
+
+            .programs-table th,
+            .programs-table td {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Manage Programs</h1>
+        <p>Kids Ministry Check-in System Administration</p>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="nav">
+        <a href="/admin">Dashboard</a>
+        <a href="/admin/volunteers">Volunteers</a>
+        <a href="/admin/programs">Programs</a>
+        <a href="/admin/attendance">Attendance</a>
+        <a href="/admin/qrcodes">QR Codes</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Programs</h2>
+            <button class="btn" onclick="openAddModal()">Add New Program</button>
+            <div id="programsTable"></div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal" id="programModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Add Program</h3>
+            <form id="programForm">
+                <div class="form-group">
+                    <label for="name">Program Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="minAge">Minimum Age (optional)</label>
+                    <input type="number" id="minAge" name="minAge" min="0" max="18">
+                </div>
+                <div class="form-group">
+                    <label for="maxAge">Maximum Age (optional)</label>
+                    <input type="number" id="maxAge" name="maxAge" min="0" max="18">
+                </div>
+                <div class="form-group" id="activeGroup" style="display: none;">
+                    <label for="active">Active</label>
+                    <select id="active" name="active">
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn" id="submitBtn">Add Program</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </form>
+            <div id="modalMessage" class="message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentProgramId = null;
+        let programs = [];
+
+        function getAuthHeaders() {
+            const token = localStorage.getItem('authToken');
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            window.location.href = '/login';
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                window.location.href = '/login';
+            }
+        }
+
+        function showMessage(elementId, text, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = text;
+            element.className = `message ${type}`;
+            element.style.display = 'block';
+        }
+
+        function loadPrograms() {
+            fetch('/api/programs/all', {
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                programs = data;
+                displayPrograms();
+            })
+            .catch(error => {
+                console.error('Error loading programs:', error);
+                showMessage('modalMessage', 'Error loading programs', 'error');
+            });
+        }
+
+        function displayPrograms() {
+            const tableHtml = `
+                <table class="programs-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Age Range</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${programs.map(program => `
+                            <tr>
+                                <td>${program.name}</td>
+                                <td>${program.min_age !== null && program.max_age !== null ? `${program.min_age}-${program.max_age} years` : program.min_age !== null ? `${program.min_age}+ years` : program.max_age !== null ? `Up to ${program.max_age} years` : 'All ages'}</td>
+                                <td><span class="${program.active ? 'status-active' : 'status-inactive'}">${program.active ? 'Active' : 'Inactive'}</span></td>
+                                <td>
+                                    <button class="btn btn-secondary" onclick="editProgram(${program.id})">Edit</button>
+                                    <button class="btn btn-danger" onclick="deleteProgram(${program.id})">Delete</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('programsTable').innerHTML = tableHtml;
+        }
+
+        function openAddModal() {
+            currentProgramId = null;
+            document.getElementById('modalTitle').textContent = 'Add Program';
+            document.getElementById('programForm').reset();
+            document.getElementById('activeGroup').style.display = 'none';
+            document.getElementById('submitBtn').textContent = 'Add Program';
+            document.getElementById('modalMessage').style.display = 'none';
+            document.getElementById('programModal').style.display = 'flex';
+        }
+
+        function editProgram(id) {
+            const program = programs.find(p => p.id === id);
+            if (!program) return;
+
+            currentProgramId = id;
+            document.getElementById('modalTitle').textContent = 'Edit Program';
+            document.getElementById('name').value = program.name;
+            document.getElementById('minAge').value = program.min_age || '';
+            document.getElementById('maxAge').value = program.max_age || '';
+            document.getElementById('active').value = program.active.toString();
+            document.getElementById('activeGroup').style.display = 'block';
+            document.getElementById('submitBtn').textContent = 'Update Program';
+            document.getElementById('modalMessage').style.display = 'none';
+            document.getElementById('programModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('programModal').style.display = 'none';
+            currentProgramId = null;
+        }
+
+        function submitProgram(event) {
+            event.preventDefault();
+
+            const formData = new FormData(event.target);
+            const data = {
+                name: formData.get('name'),
+                minAge: formData.get('minAge') ? parseInt(formData.get('minAge')) : null,
+                maxAge: formData.get('maxAge') ? parseInt(formData.get('maxAge')) : null,
+                active: formData.get('active') === 'true' || formData.get('active') === null
+            };
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+
+            let url, method;
+            if (currentProgramId) {
+                url = `/api/programs/${currentProgramId}`;
+                method = 'PUT';
+            } else {
+                url = '/api/programs';
+                method = 'POST';
+            }
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('modalMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeModal();
+                        loadPrograms();
+                    }, 1500);
+                } else {
+                    showMessage('modalMessage', data.message || 'Error saving program', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = currentProgramId ? 'Update Program' : 'Add Program';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('modalMessage', 'Error saving program', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = currentProgramId ? 'Update Program' : 'Add Program';
+            });
+        }
+
+        function deleteProgram(id) {
+            if (!confirm('Are you sure you want to delete this program? Children currently assigned to this program may be affected.')) return;
+
+            fetch(`/api/programs/${id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadPrograms();
+                } else {
+                    alert(data.message || 'Error deleting program');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting program');
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            loadPrograms();
+            
+            document.getElementById('programForm').addEventListener('submit', submitProgram);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Volunteers - Kids Ministry Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .volunteers-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .volunteers-table th,
+        .volunteers-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .volunteers-table th {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .message {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .qr-code {
+            text-align: center;
+            margin: 1rem 0;
+        }
+
+        .qr-code img {
+            max-width: 200px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .volunteers-table {
+                font-size: 0.9rem;
+            }
+
+            .volunteers-table th,
+            .volunteers-table td {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Manage Volunteers</h1>
+        <p>Kids Ministry Check-in System Administration</p>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="nav">
+        <a href="/admin">Dashboard</a>
+        <a href="/admin/volunteers">Volunteers</a>
+        <a href="/admin/programs">Programs</a>
+        <a href="/admin/attendance">Attendance</a>
+        <a href="/admin/qrcodes">QR Codes</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Volunteers</h2>
+            <button class="btn" onclick="openAddModal()">Add New Volunteer</button>
+            <div id="volunteersTable"></div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal" id="volunteerModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Add Volunteer</h3>
+            <form id="volunteerForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input type="text" id="firstName" name="firstName" required>
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input type="text" id="lastName" name="lastName" required>
+                </div>
+                <div class="form-group">
+                    <label for="role">Role</label>
+                    <select id="role" name="role">
+                        <option value="volunteer">Volunteer</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group" id="passwordGroup" style="display: none;">
+                    <label>Temporary Password</label>
+                    <div id="tempPassword" style="padding: 0.75rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; font-family: monospace;"></div>
+                </div>
+                <div class="qr-code" id="qrCodeSection" style="display: none;">
+                    <p>Scan this QR code with your authenticator app:</p>
+                    <div id="qrCode"></div>
+                    <p style="margin-top: 1rem; font-size: 0.9rem; color: #6b7280;">
+                        Keep this QR code safe. You won't be able to see it again.
+                    </p>
+                </div>
+                <button type="submit" class="btn" id="submitBtn">Add Volunteer</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </form>
+            <div id="modalMessage" class="message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentVolunteerId = null;
+        let volunteers = [];
+
+        function getAuthHeaders() {
+            const token = localStorage.getItem('authToken');
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            window.location.href = '/login';
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                window.location.href = '/login';
+            }
+        }
+
+        function showMessage(elementId, text, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = text;
+            element.className = `message ${type}`;
+            element.style.display = 'block';
+        }
+
+        function loadVolunteers() {
+            fetch('/api/volunteers', {
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                volunteers = data;
+                displayVolunteers();
+            })
+            .catch(error => {
+                console.error('Error loading volunteers:', error);
+                showMessage('modalMessage', 'Error loading volunteers', 'error');
+            });
+        }
+
+        function displayVolunteers() {
+            const tableHtml = `
+                <table class="volunteers-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>2FA</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${volunteers.map(volunteer => `
+                            <tr>
+                                <td>${volunteer.username}</td>
+                                <td>${volunteer.first_name} ${volunteer.last_name}</td>
+                                <td>${volunteer.role}</td>
+                                <td>${volunteer.enabled_2fa ? 'Enabled' : 'Disabled'}</td>
+                                <td>${volunteer.active ? 'Active' : 'Inactive'}</td>
+                                <td>
+                                    <button class="btn btn-secondary" onclick="editVolunteer(${volunteer.id})">Edit</button>
+                                    ${volunteer.role !== 'admin' ? `<button class="btn btn-danger" onclick="deleteVolunteer(${volunteer.id})">Delete</button>` : ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('volunteersTable').innerHTML = tableHtml;
+        }
+
+        function openAddModal() {
+            currentVolunteerId = null;
+            document.getElementById('modalTitle').textContent = 'Add Volunteer';
+            document.getElementById('volunteerForm').reset();
+            document.getElementById('passwordGroup').style.display = 'none';
+            document.getElementById('qrCodeSection').style.display = 'none';
+            document.getElementById('submitBtn').textContent = 'Add Volunteer';
+            document.getElementById('modalMessage').style.display = 'none';
+            document.getElementById('volunteerModal').style.display = 'flex';
+        }
+
+        function editVolunteer(id) {
+            const volunteer = volunteers.find(v => v.id === id);
+            if (!volunteer) return;
+
+            currentVolunteerId = id;
+            document.getElementById('modalTitle').textContent = 'Edit Volunteer';
+            document.getElementById('username').value = volunteer.username;
+            document.getElementById('firstName').value = volunteer.first_name;
+            document.getElementById('lastName').value = volunteer.last_name;
+            document.getElementById('role').value = volunteer.role;
+            document.getElementById('passwordGroup').style.display = 'none';
+            document.getElementById('qrCodeSection').style.display = 'none';
+            document.getElementById('submitBtn').textContent = 'Update Volunteer';
+            document.getElementById('modalMessage').style.display = 'none';
+            document.getElementById('volunteerModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('volunteerModal').style.display = 'none';
+            currentVolunteerId = null;
+        }
+
+        function submitVolunteer(event) {
+            event.preventDefault();
+
+            const formData = new FormData(event.target);
+            const data = {
+                username: formData.get('username'),
+                firstName: formData.get('firstName'),
+                lastName: formData.get('lastName'),
+                role: formData.get('role')
+            };
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+
+            let url, method;
+            if (currentVolunteerId) {
+                url = `/api/volunteers/${currentVolunteerId}`;
+                method = 'PUT';
+            } else {
+                url = '/api/volunteers';
+                method = 'POST';
+            }
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.temp_password) {
+                        document.getElementById('tempPassword').textContent = data.temp_password;
+                        document.getElementById('passwordGroup').style.display = 'block';
+                    }
+                    if (data.totp_secret) {
+                        generateQRCode(data.totp_secret, data.username);
+                        document.getElementById('qrCodeSection').style.display = 'block';
+                    }
+                    showMessage('modalMessage', data.message, 'success');
+                    if (!data.temp_password && !data.totp_secret) {
+                        setTimeout(() => {
+                            closeModal();
+                            loadVolunteers();
+                        }, 2000);
+                    } else {
+                        submitBtn.textContent = 'Done';
+                        submitBtn.onclick = () => {
+                            closeModal();
+                            loadVolunteers();
+                        };
+                    }
+                } else {
+                    showMessage('modalMessage', data.message || 'Error saving volunteer', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = currentVolunteerId ? 'Update Volunteer' : 'Add Volunteer';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('modalMessage', 'Error saving volunteer', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = currentVolunteerId ? 'Update Volunteer' : 'Add Volunteer';
+            });
+        }
+
+        function generateQRCode(totpSecret, username) {
+            // Generate TOTP URI
+            const totpUri = `otpauth://totp/KidsMinistry:${username}?secret=${totpSecret}&issuer=KidsMinistry`;
+            
+            // Use local QR generation endpoint
+            const qrCodeDiv = document.getElementById('qrCode');
+            qrCodeDiv.innerHTML = `
+                <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1rem;">
+                    Manual entry: ${totpSecret}
+                </p>
+                <img src="/api/qr/${encodeURIComponent(totpUri)}?child_name=TOTP-${username}" alt="TOTP QR Code" style="max-width: 200px;">
+            `;
+        }
+
+        function deleteVolunteer(id) {
+            if (!confirm('Are you sure you want to delete this volunteer?')) return;
+
+            fetch(`/api/volunteers/${id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadVolunteers();
+                } else {
+                    alert(data.message || 'Error deleting volunteer');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting volunteer');
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            loadVolunteers();
+            
+            document.getElementById('volunteerForm').addEventListener('submit', submitVolunteer);
+        });
+    </script>
+</body>
+</html>

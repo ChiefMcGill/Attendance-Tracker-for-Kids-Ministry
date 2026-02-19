@@ -423,7 +423,23 @@ class Database:
             """), {"child_id": child_id})
             row = result.fetchone()
             return row[0] if row else None
-    
+
+    @staticmethod
+    async def create_program(name: str, min_age: Optional[int] = None, max_age: Optional[int] = None) -> int:
+        """Create a new program"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    INSERT INTO programs (name, min_age, max_age)
+                    VALUES (:name, :min_age, :max_age)
+                """),
+                {"name": name, "min_age": min_age, "max_age": max_age}
+            )
+            result = await db.execute(text("SELECT last_insert_rowid()"))
+            program_id = result.scalar()
+            await db.commit()
+            return program_id
+
     @staticmethod
     async def search_children(query: str) -> List[Dict[str, Any]]:
         """Search children by first or last name"""
@@ -441,19 +457,56 @@ class Database:
             return [dict(zip(columns, row)) for row in rows]
     
     @staticmethod
-    async def create_attendance(child_id: int, program_id: int, station_id: str, created_by: str):
-        """Create attendance record directly"""
+    async def update_volunteer(user_id: int, updates: Dict[str, Any]):
+        """Update volunteer information"""
+        async with AsyncSessionLocal() as db:
+            # Build update query dynamically
+            set_parts = []
+            params = {"user_id": user_id}
+            
+            for key, value in updates.items():
+                if value is not None:
+                    set_parts.append(f"{key} = :{key}")
+                    params[key] = value
+            
+            if set_parts:
+                query = f"UPDATE volunteers SET {', '.join(set_parts)} WHERE id = :user_id"
+                await db.execute(text(query), params)
+                await db.commit()
+    
+    @staticmethod
+    async def delete_volunteer(user_id: int):
+        """Delete a volunteer (soft delete by setting active=false)"""
         async with AsyncSessionLocal() as db:
             await db.execute(
-                text("""
-                    INSERT INTO attendance (child_id, program_id, station_id, checkin_time, created_by)
-                    VALUES (:child_id, :program_id, :station_id, datetime('now'), :created_by)
-                """),
-                {
-                    "child_id": child_id,
-                    "program_id": program_id,
-                    "station_id": station_id,
-                    "created_by": created_by
-                }
+                text("UPDATE volunteers SET active = FALSE WHERE id = :user_id"),
+                {"user_id": user_id}
+            )
+            await db.commit()
+    
+    @staticmethod
+    async def update_program(program_id: int, updates: Dict[str, Any]):
+        """Update program information"""
+        async with AsyncSessionLocal() as db:
+            set_parts = []
+            params = {"program_id": program_id}
+            
+            for key, value in updates.items():
+                if value is not None:
+                    set_parts.append(f"{key} = :{key}")
+                    params[key] = value
+            
+            if set_parts:
+                query = f"UPDATE programs SET {', '.join(set_parts)} WHERE id = :program_id"
+                await db.execute(text(query), params)
+                await db.commit()
+    
+    @staticmethod
+    async def delete_program(program_id: int):
+        """Soft delete a program by setting active=false"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("UPDATE programs SET active = FALSE WHERE id = :program_id"),
+                {"program_id": program_id}
             )
             await db.commit()

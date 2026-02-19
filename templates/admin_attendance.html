@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Reports - Kids Ministry Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 0.5rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .download-section {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .download-section h3 {
+            margin-bottom: 1rem;
+            color: #374151;
+        }
+
+        .download-section p {
+            color: #6b7280;
+            margin-bottom: 2rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Attendance Reports</h1>
+        <p>Kids Ministry Check-in System Administration</p>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="nav">
+        <a href="/admin">Dashboard</a>
+        <a href="/admin/volunteers">Volunteers</a>
+        <a href="/admin/programs">Programs</a>
+        <a href="/admin/attendance">Attendance</a>
+        <a href="/admin/qrcodes">QR Codes</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Attendance Statistics</h2>
+            <div class="stats-grid" id="statsGrid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading statistics...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="download-section">
+                <h3>Download Attendance Data</h3>
+                <p>Download a complete CSV file of all attendance records for reporting and analysis.</p>
+                <button class="btn" onclick="downloadCSV()">Download CSV Report</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getAuthHeaders() {
+            const token = localStorage.getItem('authToken');
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            window.location.href = '/login';
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                window.location.href = '/login';
+            }
+        }
+
+        function loadStats() {
+            // For now, we'll show placeholder stats
+            // In a real implementation, you'd have API endpoints for statistics
+            const stats = [
+                { label: 'Total Check-ins Today', number: '0', note: 'Since midnight' },
+                { label: 'Total Check-ins This Week', number: '0', note: 'Last 7 days' },
+                { label: 'Total Check-ins This Month', number: '0', note: 'Current month' },
+                { label: 'Total Registered Children', number: '0', note: 'Active children' }
+            ];
+
+            const statsHtml = stats.map(stat => `
+                <div class="stat-card">
+                    <div class="stat-number">${stat.number}</div>
+                    <div class="stat-label">${stat.label}</div>
+                    ${stat.note ? `<div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${stat.note}</div>` : ''}
+                </div>
+            `).join('');
+
+            document.getElementById('statsGrid').innerHTML = statsHtml;
+        }
+
+        function downloadCSV() {
+            // Create a temporary link to download the CSV
+            const link = document.createElement('a');
+            link.href = '/api/attendance/download';
+            link.download = 'attendance_records.csv';
+            link.style.display = 'none';
+            
+            // Add to DOM, click, and remove
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            loadStats();
+        });
+    </script>
+</body>
+</html>

@@ -187,9 +187,10 @@
                     localStorage.setItem('authToken', data.token);
                     showMessage('Login successful! Redirecting...', 'success');
                     
-                    // Redirect to scanner
+                    // Redirect based on role
+                    const redirectUrl = data.role === 'admin' ? '/admin' : '/scanner';
                     setTimeout(() => {
-                        window.location.href = '/scanner';
+                        window.location.href = redirectUrl;
                     }, 1000);
                 } else if (data.requires_2fa) {
                     otpGroup.style.display = 'block';

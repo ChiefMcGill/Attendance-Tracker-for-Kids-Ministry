@@ -48,6 +48,15 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .birthdate-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .birthdate-row select {
+            flex: 1;
+        }
+
         .main-container {
             flex: 1;
             display: flex;
@@ -328,7 +337,8 @@
                             <option value="father">Father</option>
                             <option value="guardian">Guardian</option>
                             <option value="grandparent">Grandparent</option>
-                            <option value="other">Other</option>
+                            <option value="sibling">Sibling</option>
+                            <option value="aunt">Aunt/Uncle</option>
                         </select>
                     </div>
                 </div>
@@ -347,8 +357,30 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="child-birth-date">Birth Date <span class="required">*</span></label>
-                        <input type="date" id="child-birth-date" name="child_birth_date" required>
+                        <label>Birth Date <span class="required">*</span></label>
+                        <div class="birthdate-row">
+                            <select id="child-birth-year" name="child_birth_year" required>
+                                <option value="">Year</option>
+                            </select>
+                            <select id="child-birth-month" name="child_birth_month" required>
+                                <option value="">Month</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                            <select id="child-birth-day" name="child_birth_day" required>
+                                <option value="">Day</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -356,16 +388,8 @@
                 <div class="medical-section">
                     <h3>Medical Information</h3>
                     <div class="form-group">
-                        <label for="allergies">Allergies</label>
-                        <textarea id="allergies" name="allergies" placeholder="List any allergies (food, environmental, etc.)"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="medications">Medications</label>
-                        <textarea id="medications" name="medications" placeholder="List any current medications"></textarea>
-                    </div>
-                    <div class="form-group">
                         <label for="medical-notes">Medical Notes</label>
-                        <textarea id="medical-notes" name="medical_notes" placeholder="Any other relevant medical information"></textarea>
+                        <textarea id="medical-notes" name="child_medical_notes" placeholder="List any allergies, current medications or other relevant medical information"></textarea>
                     </div>
                 </div>
 
@@ -374,7 +398,7 @@
                     <h2>Special Notes</h2>
                     <div class="form-group">
                         <label for="special-notes">Special Instructions</label>
-                        <textarea id="special-notes" name="special_notes" placeholder="Any special instructions for volunteers (behavioral needs, preferences, etc.)"></textarea>
+                        <textarea id="special-notes" name="child_special_notes" placeholder="Any special instructions for volunteers (behavioral needs, preferences, etc.)"></textarea>
                     </div>
                 </div>
 
@@ -414,9 +438,49 @@
     <script>
         let programs = [];
 
+        function getAuthHeaders() {
+            const token = localStorage.getItem('authToken');
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            window.location.href = '/login';
+        }
+
+        function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                window.location.href = '/login';
+            }
+        }
+
+        function populateYearSelect() {
+            const select = document.getElementById('child-birth-year');
+            const currentYear = new Date().getFullYear();
+            for (let year = currentYear - 20; year <= currentYear; year++) {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                select.appendChild(option);
+            }
+        }
+
+        function populateDaySelect() {
+            const select = document.getElementById('child-birth-day');
+            for (let day = 1; day <= 31; day++) {
+                const option = document.createElement('option');
+                option.value = day;
+                option.textContent = day;
+                select.appendChild(option);
+            }
+        }
+
         function initializePage() {
-            // Load programs
+            checkAuth();
             loadPrograms();
+            populateYearSelect();
+            populateDaySelect();
             
             // Set up form submission
             document.getElementById('registration-form').addEventListener('submit', handleRegistration);
@@ -460,25 +524,19 @@
             const formData = new FormData(event.target);
             
             const registrationData = {
-                child: {
-                    first_name: formData.get('child_first_name'),
-                    last_name: formData.get('child_last_name'),
-                    birth_date: formData.get('child_birth_date'),
-                    allergies: formData.get('allergies') || null,
-                    medications: formData.get('medications') || null,
-                    special_notes: formData.get('special-notes') || null,
-                    medical_notes: formData.get('medical-notes') || null
-                },
-                family: {
-                    family_name: formData.get('family_name')
-                },
-                parent: {
-                    first_name: formData.get('parent_first_name'),
-                    last_name: formData.get('parent_last_name'),
-                    phone: formData.get('parent_phone'),
-                    email: formData.get('parent_email') || null,
-                    relationship: formData.get('parent_relationship')
-                },
+                parent_first_name: formData.get('parent_first_name'),
+                parent_last_name: formData.get('parent_last_name'),
+                parent_phone: formData.get('parent_phone'),
+                parent_email: formData.get('parent_email'),
+                parent_relationship: formData.get('parent_relationship'),
+                family_name: formData.get('family_name'),
+                child_first_name: formData.get('child_first_name'),
+                child_last_name: formData.get('child_last_name'),
+                child_birth_year: parseInt(formData.get('child_birth_year')),
+                child_birth_month: parseInt(formData.get('child_birth_month')),
+                child_birth_day: parseInt(formData.get('child_birth_day')),
+                child_medical_notes: formData.get('child_medical_notes') || null,
+                child_special_notes: formData.get('child_special_notes') || null,
                 program_id: parseInt(formData.get('program_id'))
             };
 
@@ -487,6 +545,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...getAuthHeaders()
                 },
                 body: JSON.stringify(registrationData)
             })
@@ -508,7 +567,7 @@
             const requiredFields = [
                 'family-name',
                 'parent-first-name', 'parent-last-name', 'parent-phone', 'parent-relationship',
-                'child-first-name', 'child-last-name', 'child-birth-date',
+                'child-first-name', 'child-last-name', 'child-birth-year', 'child-birth-month', 'child-birth-day',
                 'program'
             ];
 
@@ -521,10 +580,19 @@
                 }
             }
 
-            // Validate phone number (basic validation)
+            // Validate phone number (exactly 10 digits)
             const phone = document.getElementById('parent-phone').value;
-            if (!/^[\d\s\-\+\(\)]+$/.test(phone) || phone.length < 10) {
-                alert('Please enter a valid phone number');
+            if (!/^\d{10}$/.test(phone)) {
+                alert('Phone number must be exactly 10 digits');
+                document.getElementById('parent-phone').focus();
+                return false;
+            }
+
+            // Validate email
+            const email = document.getElementById('parent-email').value;
+            if (email && !/@.*\./.test(email)) {
+                alert('Please enter a valid email address');
+                document.getElementById('parent-email').focus();
                 return false;
             }
 
@@ -538,7 +606,7 @@
             const childName = document.getElementById('child-first-name').value + ' ' + document.getElementById('child-last-name').value;
             
             document.getElementById('success-text').innerHTML = `
-                ${childName} registered successfully!<br><br>
+                ${childName} registered and checked in successfully!<br><br>
                 <strong>QR Code:</strong> ${qrValue}<br><br>
                 <small>Use this QR code to test check-in at the scanner.</small>
             `;

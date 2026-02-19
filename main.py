@@ -16,7 +16,8 @@ import io
 from models import (
     ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo,
-    LoginRequest, LoginResponse, Volunteer
+    LoginRequest, LoginResponse, Volunteer, DirectCheckinRequest,
+    AddVolunteerRequest, UpdateVolunteerRequest, AddProgramRequest, UpdateProgramRequest
 )
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -24,6 +25,9 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import pyotp
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import qrcode
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -128,7 +132,7 @@ async def login(request: LoginRequest):
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
-    return LoginResponse(success=True, message="Login successful", token=access_token)
+    return LoginResponse(success=True, message="Login successful", token=access_token, role=user['role'])
 
 @app.get("/api/search-children")
 async def search_children(query: str, current_user: dict = Depends(get_current_user)):
@@ -367,6 +371,50 @@ async def register_new_child(request: RegisterRequest, current_user: dict = Depe
         await Database.log_event("error", "api", f"Error registering child: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@app.get("/api/child/{child_id}/qr")
+async def get_child_qr_image(child_id: int, current_user: dict = Depends(get_current_user)):
+    """Download QR code image for child - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    qr_value = await Database.get_child_qr(child_id)
+    if not qr_value:
+        raise HTTPException(status_code=404, detail="QR not found")
+    
+    # Generate QR image
+    import qrcode
+    from io import BytesIO
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(qr_value)
+    qr.make(fit=True)
+    img = qr.make_image(fill='black', back_color='white')
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    
+    # Get child name for filename
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(text("SELECT first_name, last_name FROM children WHERE id = :id"), {"id": child_id})
+        row = result.fetchone()
+        name = f"{row[0]}_{row[1]}" if row else f"child_{child_id}"
+    
+    return Response(
+        buf.getvalue(),
+        media_type="image/png",
+        headers={"Content-Disposition": f"attachment; filename={name}_QR.png"}
+    )
+
+@app.get("/api/admin/children")
+async def get_admin_children(current_user: dict = Depends(get_current_user)):
+    """Get children list for admin - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(text("SELECT id, first_name, last_name FROM children ORDER BY last_name, first_name"))
+        rows = result.fetchall()
+        return [dict(zip(result.keys(), row)) for row in rows]
+
 @app.get("/api/session/{session_id}", response_model=SessionInfo)
 async def get_session(session_id: str):
     """Get session information for confirmation"""
@@ -445,25 +493,347 @@ async def download_attendance(current_user: dict = Depends(get_current_user)):
         await Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/scanner")
-async def scanner_page(request: Request):
-    """Scanner page"""
-    return templates.TemplateResponse("scanner.html", {"request": request})
+@app.get("/api/volunteers")
+async def get_volunteers(current_user: dict = Depends(get_current_user)):
+    """Get all volunteers - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        volunteers = await Database.get_all_volunteers()
+        return volunteers
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error getting volunteers: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/volunteers")
+async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depends(get_current_user)):
+    """Add new volunteer - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Check if username already exists
+        existing = await Database.get_user_by_username(request.username)
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        
+        # Generate random password
+        password = secrets.token_urlsafe(12)
+        password_hash = get_password_hash(password)
+        
+        # Generate TOTP secret for 2FA
+        totp_secret = pyotp.random_base32()
+        
+        # Create volunteer
+        volunteer_id = await Database.create_volunteer(
+            username=request.username,
+            password_hash=password_hash,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            role=request.role
+        )
+        
+        # Update with TOTP secret and enable 2FA
+        await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
+        
+        # Log event
+        await Database.log_event("info", "api", f"New volunteer created: {request.username}", 
+                               details=f"Created by: {current_user['username']}")
+        
+        return {
+            "success": True,
+            "message": f"Volunteer {request.username} created successfully",
+            "volunteer_id": volunteer_id,
+            "temp_password": password,  # Return temp password so admin can give it to volunteer
+            "totp_secret": totp_secret  # Return TOTP secret for QR code generation
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error creating volunteer: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.put("/api/volunteers/{volunteer_id}")
+async def update_volunteer(volunteer_id: int, request: UpdateVolunteerRequest, current_user: dict = Depends(get_current_user)):
+    """Update volunteer - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Prepare updates dict
+        updates = {}
+        if request.first_name is not None:
+            updates['first_name'] = request.first_name
+        if request.last_name is not None:
+            updates['last_name'] = request.last_name
+        if request.role is not None:
+            updates['role'] = request.role
+        if request.active is not None:
+            updates['active'] = request.active
+        
+        # Handle 2FA changes
+        if request.enabled_2fa is not None:
+            if request.enabled_2fa:
+                # Generate new TOTP secret if enabling
+                totp_secret = pyotp.random_base32()
+                await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
+            else:
+                # Disable 2FA
+                await Database.update_volunteer_2fa(volunteer_id, None, False)
+        
+        # Update other fields
+        if updates:
+            await Database.update_volunteer(volunteer_id, updates)
+        
+        await Database.log_event("info", "api", f"Volunteer {volunteer_id} updated", 
+                               details=f"Updated by: {current_user['username']}")
+        
+        return {"success": True, "message": "Volunteer updated successfully"}
+        
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error updating volunteer: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/api/volunteers/{volunteer_id}")
+async def delete_volunteer(volunteer_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete volunteer - Admin only (cannot delete admin)"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Check if trying to delete admin
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT role FROM volunteers WHERE id = :id"), {"id": volunteer_id})
+            row = result.fetchone()
+            if row and row[0] == 'admin':
+                raise HTTPException(status_code=400, detail="Cannot delete admin users")
+        
+        await Database.delete_volunteer(volunteer_id)
+        
+        await Database.log_event("info", "api", f"Volunteer {volunteer_id} deleted", 
+                               details=f"Deleted by: {current_user['username']}")
+        
+        return {"success": True, "message": "Volunteer deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error deleting volunteer: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/programs/all")
+async def get_all_programs(current_user: dict = Depends(get_current_user)):
+    """Get all programs including inactive ones - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT * FROM programs ORDER BY name"))
+            rows = result.fetchall()
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error getting programs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/programs")
+async def add_program(request: AddProgramRequest, current_user: dict = Depends(get_current_user)):
+    """Add new program - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        # Check if program name already exists
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT COUNT(*) FROM programs WHERE name = :name"), {"name": request.name})
+            count = result.scalar()
+            if count > 0:
+                raise HTTPException(status_code=400, detail="Program name already exists")
+        
+        program_id = await Database.create_program(request.name, request.min_age, request.max_age)
+        
+        await Database.log_event("info", "api", f"New program created: {request.name}", 
+                               details=f"Created by: {current_user['username']}")
+        
+        return {
+            "success": True,
+            "message": f"Program '{request.name}' created successfully",
+            "program_id": program_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error creating program: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.put("/api/programs/{program_id}")
+async def update_program(program_id: int, request: UpdateProgramRequest, current_user: dict = Depends(get_current_user)):
+    """Update program - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        updates = {}
+        if request.name is not None:
+            updates['name'] = request.name
+        if request.min_age is not None:
+            updates['min_age'] = request.min_age
+        if request.max_age is not None:
+            updates['max_age'] = request.max_age
+        if request.active is not None:
+            updates['active'] = request.active
+        
+        if updates:
+            await Database.update_program(program_id, updates)
+        
+        await Database.log_event("info", "api", f"Program {program_id} updated", 
+                               details=f"Updated by: {current_user['username']}")
+        
+        return {"success": True, "message": "Program updated successfully"}
+        
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error updating program: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/api/programs/{program_id}")
+async def delete_program(program_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete program - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        await Database.delete_program(program_id)
+        
+        await Database.log_event("info", "api", f"Program {program_id} deleted", 
+                               details=f"Deleted by: {current_user['username']}")
+        
+        return {"success": True, "message": "Program deleted successfully"}
+        
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error deleting program: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/children")
+async def get_all_children(current_user: dict = Depends(get_current_user)):
+    """Get all children with QR codes - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT c.id, c.first_name, c.last_name, f.family_name, qc.qr_value
+                FROM children c
+                JOIN families f ON c.family_id = f.id
+                JOIN qr_codes qc ON c.id = qc.child_id
+                WHERE c.active = TRUE AND qc.active = TRUE
+                ORDER BY c.last_name, c.first_name
+            """))
+            rows = result.fetchall()
+            columns = result.keys()
+            children = [dict(zip(columns, row)) for row in rows]
+            return children
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error getting children: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/qr/{qr_value}")
+async def get_qr_code(qr_value: str, child_name: str = None):
+    """Generate and return QR code image"""
+    try:
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_value)
+        qr.make(fit=True)
+
+        # Create QR code image
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to RGB if needed
+        if qr_img.mode != 'RGB':
+            qr_img = qr_img.convert('RGB')
+        
+        # Create a larger image with padding for text
+        width, height = qr_img.size
+        new_height = height + 60  # Space for text
+        img = Image.new('RGB', (width, new_height), 'white')
+        img.paste(qr_img, (0, 0))
+        
+        # Add text below QR code
+        draw = ImageDraw.Draw(img)
+        try:
+            # Try to use a default font, fallback to basic if not available
+            font = ImageFont.truetype("arial.ttf", 20)
+        except:
+            font = ImageFont.load_default()
+        
+        if child_name:
+            # Center the text
+            bbox = draw.textbbox((0, 0), child_name, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_x = (width - text_width) // 2
+            draw.text((text_x, height + 10), child_name, fill='black', font=font)
+        
+        # Save to BytesIO
+        img_io = BytesIO()
+        img.save(img_io, 'JPEG', quality=95)
+        img_io.seek(0)
+        
+        # Create filename
+        filename = f"{child_name.replace(' ', '_')}_QR.jpg" if child_name else "QR.jpg"
+        
+        return Response(
+            img_io.getvalue(),
+            media_type='image/jpeg',
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error generating QR code: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error generating QR code")
+
+@app.get("/admin/volunteers")
+async def admin_volunteers_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin volunteers management page - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return templates.TemplateResponse("admin_volunteers.html", {"request": request})
+
+# ... (rest of the code remains the same)
+@app.get("/admin/programs")
+async def admin_programs_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin programs management page - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return templates.TemplateResponse("admin_programs.html", {"request": request})
+
+@app.get("/admin/attendance")
+async def admin_attendance_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin attendance reports page - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return templates.TemplateResponse("admin_attendance.html", {"request": request})
+
+@app.get("/admin/qrcodes")
+async def admin_qrcodes_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin QR codes management page - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return templates.TemplateResponse("admin_qrcodes.html", {"request": request})
 
 @app.get("/confirm")
 async def confirm_page(request: Request):
     """Confirmation page"""
     return templates.TemplateResponse("confirm.html", {"request": request})
-
-@app.get("/register")
-async def register_page(request: Request):
-    """Registration page"""
-    return templates.TemplateResponse("register.html", {"request": request})
-
-@app.get("/login")
-async def login_page(request: Request):
-    """Login page"""
-    return templates.TemplateResponse("login.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn
