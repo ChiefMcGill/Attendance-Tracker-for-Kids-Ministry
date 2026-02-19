@@ -16,7 +16,7 @@ import io
 from models import (
     ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo,
-    LoginRequest, LoginResponse, Volunteer, DirectCheckinRequest,
+    LoginRequest, LoginResponse, DirectCheckinRequest,
     AddVolunteerRequest, UpdateVolunteerRequest, AddProgramRequest, UpdateProgramRequest
 )
 from passlib.context import CryptContext
