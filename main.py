@@ -830,6 +830,13 @@ async def admin_qrcodes_page(request: Request, current_user: dict = Depends(get_
         raise HTTPException(status_code=403, detail="Admin access required")
     return templates.TemplateResponse("admin_qrcodes.html", {"request": request})
 
+@app.get("/admin")
+async def admin_dashboard(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin dashboard page - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return templates.TemplateResponse("admin.html", {"request": request})
+
 @app.get("/login")
 async def login_page(request: Request):
     """Login page"""

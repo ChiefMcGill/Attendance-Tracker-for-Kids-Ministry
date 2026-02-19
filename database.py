@@ -107,8 +107,7 @@ async def seed_initial_data():
         
         if admin_count == 0:
             # Create admin volunteer (password: admin123)
-            import bcrypt
-            password_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            password_hash = get_password_hash("admin123")
             
             await session.execute(
                 text("""
