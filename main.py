@@ -588,7 +588,10 @@ async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
                 "checkins_month": checkins_month,
                 "total_children": total_children
             }
+        
     except Exception as e:
+        await Database.log_event("error", "api", f"Error getting attendance stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/volunteers")
 async def get_volunteers(current_user: dict = Depends(get_current_user)):
