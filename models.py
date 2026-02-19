@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -96,25 +96,25 @@ class DirectCheckinRequest(BaseModel):
 
 class AddVolunteerRequest(BaseModel):
     username: str
-    first_name: str
-    last_name: str
+    first_name: str = Field(alias="firstName")
+    last_name: str = Field(alias="lastName")
     role: Optional[str] = "volunteer"
 
 class UpdateVolunteerRequest(BaseModel):
     username: str
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: Optional[str] = Field(default=None, alias="firstName")
+    last_name: Optional[str] = Field(default=None, alias="lastName")
     role: Optional[str] = None
     enabled_2fa: Optional[bool] = None
     active: Optional[bool] = None
 
 class AddProgramRequest(BaseModel):
     name: str
-    min_age: Optional[int] = None
-    max_age: Optional[int] = None
+    min_age: Optional[int] = Field(default=None, alias="minAge")
+    max_age: Optional[int] = Field(default=None, alias="maxAge")
 
 class UpdateProgramRequest(BaseModel):
     name: Optional[str] = None
-    min_age: Optional[int] = None
-    max_age: Optional[int] = None
+    min_age: Optional[int] = Field(default=None, alias="minAge")
+    max_age: Optional[int] = Field(default=None, alias="maxAge")
     active: Optional[bool] = None
