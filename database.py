@@ -136,7 +136,7 @@ async def seed_initial_data():
             # Update admin password hash to ensure it's compatible
             password_hash = get_password_hash("admin123")
             await session.execute(
-                text("UPDATE volunteers SET password_hash = :password_hash WHERE username = 'admin'"),
+                text("UPDATE volunteers SET password_hash = :password_hash, role = 'admin' WHERE username = 'admin'"),
                 {"password_hash": password_hash}
             )
         
