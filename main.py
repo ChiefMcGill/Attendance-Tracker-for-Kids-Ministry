@@ -600,6 +600,7 @@ async def get_volunteers(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        from sqlalchemy import text
         print("before get_all_volunteers")
         async with AsyncSessionLocal() as db:
             result = await db.execute(text("SELECT id, username, first_name, last_name, role, enabled_2fa, active FROM volunteers ORDER BY username"))
@@ -740,6 +741,7 @@ async def get_all_programs(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        from sqlalchemy import text
         print("before get_all_programs")
         async with AsyncSessionLocal() as db:
             result = await db.execute(text("SELECT * FROM programs ORDER BY name"))
@@ -838,6 +840,7 @@ async def get_all_children(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        from sqlalchemy import text
         print("before get_all_children")
         async with AsyncSessionLocal() as db:
             result = await db.execute(text("""
