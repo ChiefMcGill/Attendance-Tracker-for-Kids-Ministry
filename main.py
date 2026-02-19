@@ -1,7 +1,10 @@
 import os
 import uuid
 import secrets
-from datetime import datetime, timedelta
+from database import Database
+from database import init_database
+from database import get_db
+from database import AsyncSession
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -45,6 +48,7 @@ def validate_station(station_id: str) -> bool:
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
+    from database import init_database
     await init_database()
     await Database.log_event("info", "api", "Application started")
 
