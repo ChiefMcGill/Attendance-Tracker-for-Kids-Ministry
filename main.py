@@ -10,9 +10,7 @@ from fastapi.responses import StreamingResponse
 from starlette.responses import Response
 import csv
 import io
-from typing import List, Optional
-
-from database import Database, init_database, get_db, AsyncSessionLocal
+from sqlalchemy import text
 from models import (
     ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo
