@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     # Remove external port exposure - nginx handles this
     volumes:
-      - ./data:/data
+      - C:\docker-data\kids-attendance:/data
       - ./static:/app/static
     environment:
       - DB_PATH=/data/attendance.db
@@ -55,7 +55,7 @@ services:
       dockerfile: Dockerfile
     command: python worker.py
     volumes:
-      - ./data:/data
+      - C:\docker-data\kids-attendance:/data
       - ./whatsapp_session:/home/pi/.whatsapp_session
     environment:
       - DB_PATH=/data/attendance.db
