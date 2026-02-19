@@ -285,7 +285,7 @@ async def download_attendance():
             
     except Exception as e:
         await Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return Response(str(e), status_code=500)
 
 @app.get("/scanner")
 async def scanner_page(request: Request):
