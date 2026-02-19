@@ -156,33 +156,65 @@ async def get_programs_api():
     """Get all programs"""
     return await Database.get_programs()
 
-@app.post("/api/checkin-direct", response_model=CheckinResponse)
-async def checkin_direct(request: DirectCheckinRequest, current_user: dict = Depends(get_current_user)):
-    """Direct check-in for searched children - requires auth"""
+@app.post("/api/scan", response_model=ScanResponse)
+async def scan_qr_code(request: ScanRequest):
+    """
+    Scan QR code and create check-in session
+    
+    This endpoint is called when a QR code is scanned at a station.
+    It validates the QR code, retrieves child information, and creates a temporary session.
+    """
     try:
         # Validate station
         if not validate_station(request.station_id):
-            return CheckinResponse(success=False, message="Invalid station ID")
+            await Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}", 
+                                   details=f"Device: {request.device_id}")
+            return ScanResponse(
+                success=False,
+                message="Invalid station ID"
+            )
         
-        # Create attendance
-        await Database.create_attendance(request.child_id, request.program_id, request.station_id, current_user['username'])
+        # Look up child by QR code
+        child_info = await Database.get_child_by_qr(request.qr_value)
         
-        # Get child name
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT first_name, last_name FROM children WHERE id = :id"), {"id": request.child_id})
-            row = result.fetchone()
-            child_name = f"{row[0]} {row[1]}" if row else "Unknown"
+        if not child_info:
+            await Database.log_event("warning", "api", "QR code not found", 
+                                   details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
+            return ScanResponse(
+                success=False,
+                message="QR code not found. Please register this child."
+            )
         
-        await Database.log_event("info", "api", "Direct check-in", 
-                               details=f"Child: {child_name}, Volunteer: {current_user['username']}")
+        # Generate session ID
+        session_id = secrets.token_urlsafe(16)
         
-        return CheckinResponse(success=True, message=f"{child_name} checked in successfully!", child_name=child_name)
+        # Get available programs
+        programs = await Database.get_programs()
+        
+        # Create check-in session (without program_id for now - will be selected by user)
+        await Database.create_checkin_session(
+            session_id=session_id,
+            child_id=child_info["id"],
+            program_id=1,  # Default to first program, will be updated
+            station_id=request.station_id,
+            device_id=request.device_id
+        )
+        
+        await Database.log_event("info", "api", "QR code scanned successfully", 
+                               details=f"Child: {child_info['first_name']} {child_info['last_name']}, Session: {session_id}")
+        
+        return ScanResponse(
+            success=True,
+            session_id=session_id,
+            child_info=child_info,
+            programs=programs,
+            message=f"Found {child_info['first_name']} {child_info['last_name']}"
+        )
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error direct check-in: {str(e)}")
+        await Database.log_event("error", "api", f"Error scanning QR code: {str(e)}", 
+                               details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.post("/api/scan", response_model=ScanResponse)
 async def scan_qr_code(request: ScanRequest):
     """
     Scan QR code and create check-in session
@@ -313,23 +345,39 @@ async def confirm_checkin(request: CheckinRequest):
 @app.post("/api/checkin-direct")
 async def direct_checkin(request: DirectCheckinRequest, current_user: dict = Depends(get_current_user)):
     """Direct check-in from scanner search - requires auth"""
+    print(f"Direct checkin request: {request.dict()}")
     try:
         # Create attendance
-        attendance_id = await Database.create_attendance(
-            child_id=request.child_id,
-            program_id=request.program_id,
-            station_id=request.station_id,
-            created_by=current_user['username']
-        )
+        try:
+            attendance_id = await Database.create_attendance(
+                child_id=request.child_id,
+                program_id=request.program_id,
+                station_id=request.station_id,
+                created_by=current_user['username']
+            )
+            print(f"Attendance created with ID: {attendance_id}")
+        except Exception as e:
+            print(f"Error in create_attendance: {e}")
+            raise
         
         # Get child name
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT first_name, last_name FROM children WHERE id = :id"), {"id": request.child_id})
-            row = result.fetchone()
-            child_name = f"{row[0]} {row[1]}" if row else "Unknown Child"
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("SELECT first_name, last_name FROM children WHERE id = :id"), {"id": request.child_id})
+                row = result.fetchone()
+                child_name = f"{row[0]} {row[1]}" if row else "Unknown Child"
+            print(f"Child name: {child_name}")
+        except Exception as e:
+            print(f"Error getting child name: {e}")
+            raise
         
         # Get label payload
-        label_payload = await get_print_payload(attendance_id)
+        try:
+            label_payload = await get_print_payload(attendance_id)
+            print("Label payload retrieved")
+        except Exception as e:
+            print(f"Error getting label payload: {e}")
+            raise
         
         await Database.log_event("info", "api", f"Direct check-in: {child_name}", 
                                details=f"Station: {request.station_id}, Volunteer: {current_user['username']}")
@@ -342,6 +390,7 @@ async def direct_checkin(request: DirectCheckinRequest, current_user: dict = Dep
         }
         
     except Exception as e:
+        print(f"Unexpected error in direct_checkin: {e}")
         await Database.log_event("error", "api", f"Error direct check-in: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -620,6 +669,8 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    print(f"Received request: {request.dict()}")
+    
     try:
         # Check if username already exists
         existing = await Database.get_user_by_username(request.username)
@@ -637,16 +688,26 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
         totp_secret = pyotp.random_base32()
         
         # Create volunteer
-        volunteer_id = await Database.create_volunteer(
-            username=request.username,
-            password_hash=password_hash,
-            first_name=request.first_name,
-            last_name=request.last_name,
-            role=request.role
-        )
+        try:
+            volunteer_id = await Database.create_volunteer(
+                username=request.username,
+                password_hash=password_hash,
+                first_name=request.first_name,
+                last_name=request.last_name,
+                role=request.role
+            )
+            print(f"Volunteer created with ID: {volunteer_id}")
+        except Exception as e:
+            print(f"Error in create_volunteer: {e}")
+            raise
         
         # Update with TOTP secret and enable 2FA
-        await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
+        try:
+            await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
+            print("2FA updated")
+        except Exception as e:
+            print(f"Error in update_volunteer_2fa: {e}")
+            raise
         
         # Log event
         await Database.log_event("info", "api", f"New volunteer created: {request.username}", 
@@ -663,6 +724,7 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Unexpected error in add_volunteer: {e}")
         await Database.log_event("error", "api", f"Error creating volunteer: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 

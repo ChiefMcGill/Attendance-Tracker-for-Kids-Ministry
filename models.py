@@ -99,6 +99,9 @@ class AddVolunteerRequest(BaseModel):
     first_name: str = Field(alias="firstName")
     last_name: str = Field(alias="lastName")
     role: Optional[str] = "volunteer"
+    
+    class Config:
+        allow_population_by_field_name = True
 
 class UpdateVolunteerRequest(BaseModel):
     username: str
@@ -107,14 +110,23 @@ class UpdateVolunteerRequest(BaseModel):
     role: Optional[str] = None
     enabled_2fa: Optional[bool] = None
     active: Optional[bool] = None
+    
+    class Config:
+        allow_population_by_field_name = True
 
 class AddProgramRequest(BaseModel):
     name: str
     min_age: Optional[int] = Field(default=None, alias="minAge")
     max_age: Optional[int] = Field(default=None, alias="maxAge")
+    
+    class Config:
+        allow_population_by_field_name = True
 
 class UpdateProgramRequest(BaseModel):
     name: Optional[str] = None
     min_age: Optional[int] = Field(default=None, alias="minAge")
     max_age: Optional[int] = Field(default=None, alias="maxAge")
     active: Optional[bool] = None
+    
+    class Config:
+        allow_population_by_field_name = True
