@@ -1,6 +1,7 @@
 import os
 import uuid
 import secrets
+import re
 import base64
 from jose import jwt
 import pyotp
@@ -24,7 +25,7 @@ from models import (
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo,
     LoginRequest, LoginResponse, DirectCheckinRequest,
     AddVolunteerRequest, UpdateVolunteerRequest, AddProgramRequest, UpdateProgramRequest,
-    Setup2FARequest
+    Setup2FARequest, ProfileUpdateRequest, ChangePasswordRequest
 )
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -70,6 +71,19 @@ STATION_TOKENS = os.getenv("STATION_TOKENS", "entrance-a,entrance-b,checkout-a")
 def validate_station(station_id: str) -> bool:
     """Validate station ID"""
     return station_id in STATION_TOKENS
+
+def validate_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    if not re.search(r'[A-Z]', password):
+        return False
+    if not re.search(r'[a-z]', password):
+        return False
+    if not re.search(r'\d', password):
+        return False
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        return False
+    return True
 
 # Auth utilities
 
@@ -836,6 +850,44 @@ async def setup_2fa(request: Setup2FARequest):
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
     return {"success": True, "token": access_token, "role": user['role']}
+
+@app.get("/profile")
+async def profile_page(request: Request, current_user: dict = Depends(get_current_user)):
+    return templates.TemplateResponse("profile.html", {"request": request, "user": current_user})
+
+@app.get("/api/profile")
+async def get_profile(current_user: dict = Depends(get_current_user)):
+    return {
+        "username": current_user['username'],
+        "first_name": current_user['first_name'],
+        "last_name": current_user['last_name'],
+        "email": current_user.get('email', ''),
+        "role": current_user['role']
+    }
+
+@app.put("/api/profile")
+async def update_profile(request: ProfileUpdateRequest, current_user: dict = Depends(get_current_user)):
+    updates = {}
+    if request.first_name is not None:
+        updates['first_name'] = request.first_name
+    if request.last_name is not None:
+        updates['last_name'] = request.last_name
+    if request.email is not None:
+        updates['email'] = request.email
+    if updates:
+        await Database.update_volunteer(current_user['id'], updates)
+    return {"success": True, "message": "Profile updated"}
+
+@app.post("/api/change-password")
+async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    if not verify_password(request.current_password, current_user['password_hash']):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if not validate_password(request.new_password):
+        raise HTTPException(status_code=400, detail="Password does not meet strength requirements")
+    new_hash = get_password_hash(request.new_password)
+    await Database.update_volunteer(current_user['id'], {'password_hash': new_hash})
+    return {"success": True, "message": "Password changed"}
+
 async def get_all_programs(current_user: dict = Depends(get_current_user)):
     """Get all programs including inactive ones - Admin only"""
     if current_user['role'] != 'admin':

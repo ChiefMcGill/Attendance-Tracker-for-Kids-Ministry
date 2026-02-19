@@ -19,6 +19,18 @@ class Setup2FARequest(BaseModel):
     totp_secret: str
     username: str
 
+class ProfileUpdateRequest(BaseModel):
+    first_name: Optional[str] = Field(default=None, alias="firstName")
+    last_name: Optional[str] = Field(default=None, alias="lastName")
+    email: Optional[str] = None
+    
+    class Config:
+        allow_population_by_field_name = True
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class RegisterRequest(BaseModel):
     parent_first_name: str
     parent_last_name: str
@@ -117,8 +129,8 @@ class UpdateVolunteerRequest(BaseModel):
     username: str
     first_name: Optional[str] = Field(default=None, alias="firstName")
     last_name: Optional[str] = Field(default=None, alias="lastName")
+    email: Optional[str] = None
     role: Optional[str] = None
-    enabled_2fa: Optional[bool] = None
     active: Optional[bool] = None
     
     class Config:

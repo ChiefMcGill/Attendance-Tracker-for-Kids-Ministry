@@ -379,19 +379,12 @@ class Database:
             }
     
     @staticmethod
-    async def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-        """Get volunteer by username"""
+    async def get_user_by_username(username: str):
         async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                SELECT id, username, password_hash, first_name, last_name, role, totp_secret, enabled_2fa, active
-                FROM volunteers
-                WHERE username = :username AND active = TRUE
-            """), {"username": username})
-            
+            result = await db.execute(text("SELECT id, username, first_name, last_name, email, role, password_hash, totp_secret, enabled_2fa, active FROM volunteers WHERE username = :username"), {"username": username})
             row = result.fetchone()
             if row:
-                columns = result.keys()
-                return dict(zip(columns, row))
+                return dict(zip(['id', 'username', 'first_name', 'last_name', 'email', 'role', 'password_hash', 'totp_secret', 'enabled_2fa', 'active'], row))
             return None
     
     @staticmethod
