@@ -8,12 +8,22 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import StaticPool
 import aiosqlite
+from passlib.context import CryptContext
 
 # Database configuration
 DB_PATH = os.getenv("DB_PATH", "/data/attendance.db")
 
 # SQLAlchemy setup
 Base = declarative_base()
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 # Async engine for main application
 async_engine = create_async_engine(
