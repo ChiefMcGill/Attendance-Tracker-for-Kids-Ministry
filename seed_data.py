@@ -133,7 +133,7 @@ async def create_sample_data():
                             "child_id": child_id,
                             "program_id": program[0],
                             "station_id": random.choice(["entrance-a", "entrance-b"]),
-                            "checkin_time": checkin_date.replace(hour=9, minute=30 + random.randint(0, 30)),
+                            "checkin_time": checkin_date.replace(hour=9, minute=30 + random.randint(0, 29)),
                             "created_by": random.choice(["Alice", "Bob", "Carol", "Dave"])
                         }
                     )
