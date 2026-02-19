@@ -1089,3 +1089,5 @@ async def scanner_page(request: Request, current_user: dict = Depends(get_curren
     return templates.TemplateResponse("scanner.html", {"request": request})
 
 if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
