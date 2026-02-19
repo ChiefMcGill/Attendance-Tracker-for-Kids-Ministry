@@ -589,8 +589,6 @@ async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
                 "total_children": total_children
             }
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting attendance stats: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/volunteers")
 async def get_volunteers(current_user: dict = Depends(get_current_user)):
@@ -599,9 +597,12 @@ async def get_volunteers(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        print("before get_all_volunteers")
         volunteers = await Database.get_all_volunteers()
+        print(f"volunteers: {volunteers}")
         return volunteers
     except Exception as e:
+        print(f"error in get_volunteers: {e}")
         await Database.log_event("error", "api", f"Error getting volunteers: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -732,12 +733,16 @@ async def get_all_programs(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        print("before get_all_programs")
         async with AsyncSessionLocal() as db:
             result = await db.execute(text("SELECT * FROM programs ORDER BY name"))
             rows = result.fetchall()
             columns = result.keys()
-            return [dict(zip(columns, row)) for row in rows]
+            programs = [dict(zip(columns, row)) for row in rows]
+        print(f"programs: {programs}")
+        return programs
     except Exception as e:
+        print(f"error in get_all_programs: {e}")
         await Database.log_event("error", "api", f"Error getting programs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -826,6 +831,7 @@ async def get_all_children(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
+        print("before get_all_children")
         async with AsyncSessionLocal() as db:
             result = await db.execute(text("""
                 SELECT c.id, c.first_name, c.last_name, f.family_name, qc.qr_value
@@ -838,8 +844,10 @@ async def get_all_children(current_user: dict = Depends(get_current_user)):
             rows = result.fetchall()
             columns = result.keys()
             children = [dict(zip(columns, row)) for row in rows]
-            return children
+        print(f"children: {children}")
+        return children
     except Exception as e:
+        print(f"error in get_all_children: {e}")
         await Database.log_event("error", "api", f"Error getting children: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
