@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 from starlette.responses import Response
 import csv
 import io
-from sqlalchemy import text
 from models import (
     ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo
@@ -236,6 +235,7 @@ async def get_session(session_id: str):
 @app.get("/api/attendance/download")
 async def download_attendance():
     """Download attendance records as CSV"""
+    from sqlalchemy import text
     try:
         # Get all attendance records with child and program info
         async with AsyncSessionLocal() as db:
@@ -283,7 +283,7 @@ async def download_attendance():
             
     except Exception as e:
         await Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
-        return Response(str(e), status_code=500)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/scanner")
 async def scanner_page(request: Request):
