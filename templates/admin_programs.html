@@ -418,6 +418,8 @@
                     setTimeout(() => {
                         closeModal();
                         loadPrograms();
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Add Program';
                     }, 1500);
                 } else {
                     showMessage('modalMessage', data.message || 'Error saving program', 'error');

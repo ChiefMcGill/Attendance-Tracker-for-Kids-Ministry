@@ -273,8 +273,8 @@
             <h3>Check In Child</h3>
             <p id="childName"></p>
             <select id="programSelect"></select>
-            <button class="btn" onclick="submitCheckin()">Check In</button>
-            <button class="btn" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitCheckin()">Check In</button>
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
         </div>
     </div>
 
@@ -454,8 +454,16 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    localStorage.setItem('label_payload', JSON.stringify(data.label_payload));
-                    window.location.href = '/success';
+                    const modalContent = document.querySelector('#checkinModal .modal-content');
+                    modalContent.innerHTML = `
+                        <h3>Check In Successful!</h3>
+                        <p>Child: ${data.label_payload.child_name}</p>
+                        <p>Age: ${data.label_payload.age}</p>
+                        <p>Family: ${data.label_payload.family_name}</p>
+                        <p>Parents: ${data.label_payload.parents.map(p => p.name + ' (' + p.phone + ')').join(', ')}</p>
+                        <img src="data:image/png;base64,${data.label_payload.qr_b64}" alt="QR Code" style="max-width: 150px;">
+                        <br><button class="btn btn-primary" onclick="closeModal()">Done</button>
+                    `;
                 } else {
                     showStatus(data.message, 'error');
                 }

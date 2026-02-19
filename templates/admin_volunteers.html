@@ -145,13 +145,16 @@
         }
 
         .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             background: white;
-            border-radius: 20px;
             padding: 2rem;
-            max-width: 500px;
+            border-radius: 10px;
             width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .form-group {
@@ -392,8 +395,13 @@
         }
 
         function editVolunteer(id) {
-            const volunteer = volunteers.find(v => v.id === id);
-            if (!volunteer) return;
+            console.log('editVolunteer called with id:', id);
+            const volunteer = volunteers.find(v => v.id == id);
+            console.log('Found volunteer:', volunteer);
+            if (!volunteer) {
+                console.log('Volunteer not found for id:', id);
+                return;
+            }
 
             currentVolunteerId = id;
             document.getElementById('modalTitle').textContent = 'Edit Volunteer';
