@@ -78,7 +78,8 @@ async def init_database():
         alters = [
             "ALTER TABLE volunteers ADD COLUMN totp_secret TEXT",
             "ALTER TABLE volunteers ADD COLUMN enabled_2fa BOOLEAN DEFAULT FALSE",
-            "ALTER TABLE volunteers ADD COLUMN active BOOLEAN DEFAULT TRUE"
+            "ALTER TABLE volunteers ADD COLUMN active BOOLEAN DEFAULT TRUE",
+            "ALTER TABLE volunteers ADD COLUMN email TEXT"
         ]
         for alter in alters:
             try:
