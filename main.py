@@ -23,7 +23,8 @@ from models import (
     ScanRequest, ScanResponse, CheckinRequest, CheckinResponse,
     RegisterRequest, RegisterResponse, ChildInfo, Program, SessionInfo,
     LoginRequest, LoginResponse, DirectCheckinRequest,
-    AddVolunteerRequest, UpdateVolunteerRequest, AddProgramRequest, UpdateProgramRequest
+    AddVolunteerRequest, UpdateVolunteerRequest, AddProgramRequest, UpdateProgramRequest,
+    Setup2FARequest
 )
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -126,18 +127,51 @@ async def login(request: Request, login_data: LoginRequest):
         return {"success": False, "message": "Invalid username or password"}
     if not verify_password(login_data.password, user['password_hash']):
         return {"success": False, "message": "Invalid username or password"}
-    if user['enabled_2fa']:
+    
+    # Check 2FA
+    if user.get('enabled_2fa'):
         if not login_data.otp:
-            return {"success": False, "message": "2FA required", "requires_2fa": True}
+            return {"success": False, "message": "2FA code required", "requires_2fa": True}
         totp = pyotp.TOTP(user['totp_secret'])
         if not totp.verify(login_data.otp):
             return {"success": False, "message": "Invalid 2FA code"}
+    else:
+        # Not enabled, setup required
+        totp_secret = pyotp.random_base32()
+        await Database.update_volunteer_2fa(user['id'], totp_secret, False)
+        return {"success": False, "setup_2fa": True, "totp_secret": totp_secret, "message": "2FA setup required"}
+    
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
     request.session['token'] = access_token
     return {"success": True, "message": "Login successful", "token": access_token, "role": user['role']}
+
+@app.post("/api/setup_2fa")
+async def setup_2fa_endpoint(request: Setup2FARequest):
+    user = await Database.get_user_by_username(request.username)
+    if not user:
+        return {"success": False, "message": "User not found"}
+    if user.get('enabled_2fa'):
+        return {"success": False, "message": "2FA already enabled"}
+    if not user.get('totp_secret'):
+        return {"success": False, "message": "2FA not initialized"}
+    
+    totp = pyotp.TOTP(user['totp_secret'])
+    if not totp.verify(request.totp_code):
+        return {"success": False, "message": "Invalid 2FA code"}
+    
+    # Enable 2FA
+    await Database.update_volunteer_2fa(user['id'], user['totp_secret'], True)
+    
+    # Create token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user['username']}, expires_delta=access_token_expires
+    )
+    
+    return {"success": True, "message": "2FA enabled", "token": access_token, "role": user['role']}
 
 @app.get("/api/search-children")
 async def search_children(query: str, current_user: dict = Depends(get_current_user)):
@@ -680,9 +714,6 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
         password = secrets.token_urlsafe(12)
         password_hash = get_password_hash(password)
         
-        # Generate TOTP secret for 2FA
-        totp_secret = pyotp.random_base32()
-        
         # Create volunteer
         try:
             volunteer_id = await Database.create_volunteer(
@@ -697,14 +728,6 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
             print(f"Error in create_volunteer: {e}")
             raise
         
-        # Update with TOTP secret and enable 2FA
-        try:
-            await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
-            print("2FA updated")
-        except Exception as e:
-            print(f"Error in update_volunteer_2fa: {e}")
-            raise
-        
         # Log event
         await Database.log_event("info", "api", f"New volunteer created: {request.username}", 
                                details=f"Created by: {current_user['username']}")
@@ -713,8 +736,7 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
             "success": True,
             "message": f"Volunteer {request.username} created successfully",
             "volunteer_id": volunteer_id,
-            "temp_password": password,  # Return temp password so admin can give it to volunteer
-            "totp_secret": totp_secret  # Return TOTP secret for QR code generation
+            "temp_password": password  # Return temp password so admin can give it to volunteer
         }
         
     except HTTPException:
@@ -987,6 +1009,22 @@ END:VCARD"""
         await Database.log_event("error", "api", f"Error getting print payload: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@app.get("/api/qr/{otpauth:path}")
+async def generate_qr(otpauth: str):
+    """Generate QR code for TOTP otpauth URL"""
+    try:
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(otpauth)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        return Response(content=buf.getvalue(), media_type="image/png")
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error generating QR code: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error generating QR code")
+
 @app.get("/admin/volunteers")
 async def admin_volunteers_page(request: Request, current_user: dict = Depends(get_current_user)):
     """Admin volunteers management page - Admin only"""
@@ -1043,6 +1081,11 @@ async def success_page(request: Request):
     """Success page"""
     return templates.TemplateResponse("success.html", {"request": request})
 
+@app.get("/scanner")
+async def scanner_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Scanner page for volunteers and admins"""
+    if current_user['role'] not in ['admin', 'volunteer']:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return templates.TemplateResponse("scanner.html", {"request": request})
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

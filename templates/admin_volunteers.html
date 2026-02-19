@@ -297,13 +297,6 @@
                     <label>Temporary Password</label>
                     <div id="tempPassword" style="padding: 0.75rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; font-family: monospace;"></div>
                 </div>
-                <div class="qr-code" id="qrCodeSection" style="display: none;">
-                    <p>Scan this QR code with your authenticator app:</p>
-                    <div id="qrCode"></div>
-                    <p style="margin-top: 1rem; font-size: 0.9rem; color: #6b7280;">
-                        Keep this QR code safe. You won't be able to see it again.
-                    </p>
-                </div>
                 <button type="submit" class="btn" id="submitBtn">Add Volunteer</button>
                 <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             </form>
@@ -459,18 +452,15 @@
                         document.getElementById('tempPassword').textContent = data.temp_password;
                         document.getElementById('passwordGroup').style.display = 'block';
                     }
-                    if (data.totp_secret) {
-                        generateQRCode(data.totp_secret, data.username);
-                        document.getElementById('qrCodeSection').style.display = 'block';
-                    }
                     showMessage('modalMessage', data.message, 'success');
-                    if (!data.temp_password && !data.totp_secret) {
+                    if (!data.temp_password) {
                         setTimeout(() => {
                             closeModal();
                             loadVolunteers();
                         }, 2000);
                     } else {
                         submitBtn.textContent = 'Done';
+                        submitBtn.type = 'button';
                         submitBtn.onclick = () => {
                             closeModal();
                             loadVolunteers();
@@ -488,20 +478,6 @@
                 submitBtn.disabled = false;
                 submitBtn.textContent = currentVolunteerId ? 'Update Volunteer' : 'Add Volunteer';
             });
-        }
-
-        function generateQRCode(totpSecret, username) {
-            // Generate TOTP URI
-            const totpUri = `otpauth://totp/KidsMinistry:${username}?secret=${totpSecret}&issuer=KidsMinistry`;
-            
-            // Use local QR generation endpoint
-            const qrCodeDiv = document.getElementById('qrCode');
-            qrCodeDiv.innerHTML = `
-                <p style="font-size: 0.9rem; color: #6b7280; margin-bottom: 1rem;">
-                    Manual entry: ${totpSecret}
-                </p>
-                <img src="/api/qr/${encodeURIComponent(totpUri)}?child_name=TOTP-${username}" alt="TOTP QR Code" style="max-width: 200px;">
-            `;
         }
 
         function deleteVolunteer(id) {

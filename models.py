@@ -88,6 +88,10 @@ class LoginResponse(BaseModel):
     requires_2fa: bool = False
     role: Optional[str] = None
 
+class Setup2FARequest(BaseModel):
+    username: str
+    totp_code: str
+
 class DirectCheckinRequest(BaseModel):
     child_id: int
     program_id: int
