@@ -601,7 +601,11 @@ async def get_volunteers(current_user: dict = Depends(get_current_user)):
     
     try:
         print("before get_all_volunteers")
-        volunteers = await Database.get_all_volunteers()
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT id, username, first_name, last_name, role, enabled_2fa, active FROM volunteers ORDER BY username"))
+            rows = result.fetchall()
+            columns = result.keys()
+            volunteers = [dict(zip(columns, row)) for row in rows]
         print(f"volunteers: {volunteers}")
         return volunteers
     except Exception as e:
