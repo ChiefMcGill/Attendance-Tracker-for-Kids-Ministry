@@ -4,7 +4,7 @@ import secrets
 from database import Database
 from database import init_database
 from database import get_db
-from database import AsyncSession
+from database import AsyncSessionLocal
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -59,7 +59,7 @@ async def root(request: Request):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    from datetime import datetime
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.post("/api/scan", response_model=ScanResponse)
