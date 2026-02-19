@@ -1,7 +1,7 @@
 import os
 import uuid
 import secrets
-import jwt
+from jose import jwt
 import pyotp
 from database import verify_password, get_password_hash
 from database import init_database
