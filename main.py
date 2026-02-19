@@ -501,6 +501,43 @@ async def download_attendance(current_user: dict = Depends(get_current_user)):
         await Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@app.get("/api/attendance/stats")
+async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
+    """Get attendance statistics - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            # Today's check-ins
+            today = datetime.now().date()
+            result = await db.execute(text("SELECT COUNT(*) FROM attendance WHERE DATE(checkin_time) = :today"), {"today": today})
+            checkins_today = result.scalar()
+            
+            # This week's check-ins
+            week_ago = datetime.now() - timedelta(days=7)
+            result = await db.execute(text("SELECT COUNT(*) FROM attendance WHERE checkin_time >= :week_ago"), {"week_ago": week_ago})
+            checkins_week = result.scalar()
+            
+            # This month's check-ins
+            month_start = datetime.now().replace(day=1)
+            result = await db.execute(text("SELECT COUNT(*) FROM attendance WHERE checkin_time >= :month_start"), {"month_start": month_start})
+            checkins_month = result.scalar()
+            
+            # Total registered children
+            result = await db.execute(text("SELECT COUNT(*) FROM children"))
+            total_children = result.scalar()
+            
+            return {
+                "checkins_today": checkins_today,
+                "checkins_week": checkins_week,
+                "checkins_month": checkins_month,
+                "total_children": total_children
+            }
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error getting attendance stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.get("/api/volunteers")
 async def get_volunteers(current_user: dict = Depends(get_current_user)):
     """Get all volunteers - Admin only"""

@@ -98,7 +98,7 @@ class AddVolunteerRequest(BaseModel):
     username: str
     first_name: str
     last_name: str
-    role: str = "volunteer"
+    role: Optional[str] = "volunteer"
 
 class UpdateVolunteerRequest(BaseModel):
     username: str

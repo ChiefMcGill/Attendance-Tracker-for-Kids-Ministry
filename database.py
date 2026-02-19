@@ -413,17 +413,36 @@ class Database:
             return (await db.execute(text("SELECT last_insert_rowid()"))).scalar()
     
     @staticmethod
-    async def get_all_volunteers() -> List[Dict[str, Any]]:
-        """Get all volunteers"""
+    async def create_program(name: str, min_age: int, max_age: int) -> int:
+        """Create a new program"""
         async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                SELECT id, username, first_name, last_name, role, enabled_2fa, active
-                FROM volunteers
-                ORDER BY username
-            """))
-            rows = result.fetchall()
-            columns = result.keys()
-            return [dict(zip(columns, row)) for row in rows]
+            await db.execute(
+                text("""
+                    INSERT INTO programs (name, min_age, max_age)
+                    VALUES (:name, :min_age, :max_age)
+                """),
+                {"name": name, "min_age": min_age, "max_age": max_age}
+            )
+            await db.commit()
+            return (await db.execute(text("SELECT last_insert_rowid()"))).scalar()
+    
+    @staticmethod
+    async def update_program(program_id: int, updates: dict):
+        """Update program fields"""
+        async with AsyncSessionLocal() as db:
+            set_clause = ", ".join(f"{k} = :{k}" for k in updates.keys())
+            await db.execute(
+                text(f"UPDATE programs SET {set_clause} WHERE id = :program_id"),
+                {**updates, "program_id": program_id}
+            )
+            await db.commit()
+    
+    @staticmethod
+    async def delete_program(program_id: int):
+        """Delete program"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("DELETE FROM programs WHERE id = :program_id"), {"program_id": program_id})
+            await db.commit()
     
     @staticmethod
     async def update_volunteer_2fa(user_id: int, totp_secret: str, enabled: bool):
@@ -437,6 +456,24 @@ class Database:
                 """),
                 {"user_id": user_id, "totp_secret": totp_secret, "enabled": enabled}
             )
+            await db.commit()
+    
+    @staticmethod
+    async def update_volunteer(user_id: int, updates: dict):
+        """Update volunteer fields"""
+        async with AsyncSessionLocal() as db:
+            set_clause = ", ".join(f"{k} = :{k}" for k in updates.keys())
+            await db.execute(
+                text(f"UPDATE volunteers SET {set_clause} WHERE id = :user_id"),
+                {**updates, "user_id": user_id}
+            )
+            await db.commit()
+    
+    @staticmethod
+    async def delete_volunteer(user_id: int):
+        """Delete volunteer"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("DELETE FROM volunteers WHERE id = :user_id"), {"user_id": user_id})
             await db.commit()
     
     @staticmethod
