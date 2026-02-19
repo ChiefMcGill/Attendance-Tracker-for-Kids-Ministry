@@ -75,14 +75,16 @@ async def init_database():
                 conn.execute(text(statement))
         
         # Add missing columns for migrations (if table already exists)
-        try:
-            conn.execute(text("ALTER TABLE volunteers ADD COLUMN totp_secret TEXT"))
-        except:
-            pass  # Column might already exist
-        try:
-            conn.execute(text("ALTER TABLE volunteers ADD COLUMN enabled_2fa BOOLEAN DEFAULT FALSE"))
-        except:
-            pass  # Column might already exist
+        alters = [
+            "ALTER TABLE volunteers ADD COLUMN totp_secret TEXT",
+            "ALTER TABLE volunteers ADD COLUMN enabled_2fa BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE volunteers ADD COLUMN active BOOLEAN DEFAULT TRUE"
+        ]
+        for alter in alters:
+            try:
+                conn.execute(text(alter))
+            except:
+                pass  # Column might already exist
         
         conn.commit()
     

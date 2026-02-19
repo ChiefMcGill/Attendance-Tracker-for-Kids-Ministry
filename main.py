@@ -1,6 +1,7 @@
 import os
 import uuid
 import secrets
+import base64
 from jose import jwt
 import pyotp
 from database import verify_password, get_password_hash
@@ -241,7 +242,7 @@ async def scan_qr_code(request: ScanRequest):
                                details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.post("/api/checkin", response_model=CheckinResponse)
+@app.post("/api/checkin")
 async def confirm_checkin(request: CheckinRequest):
     """
     Confirm check-in and create attendance record
@@ -252,10 +253,10 @@ async def confirm_checkin(request: CheckinRequest):
         # Validate station
         if not validate_station(request.station_id):
             await Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}")
-            return CheckinResponse(
-                success=False,
-                message="Invalid station ID"
-            )
+            return {
+                "success": False,
+                "message": "Invalid station ID"
+            }
         
         # Get session details
         session_info = await Database.get_checkin_session(request.session_id)
@@ -263,10 +264,10 @@ async def confirm_checkin(request: CheckinRequest):
         if not session_info:
             await Database.log_event("warning", "api", "Invalid or expired session", 
                                    details=f"Session: {request.session_id}")
-            return CheckinResponse(
-                success=False,
-                message="Session expired or not found. Please scan again."
-            )
+            return {
+                "success": False,
+                "message": "Session expired or not found. Please scan again."
+            }
         
         # Confirm check-in
         success = await Database.confirm_checkin(
@@ -277,25 +278,71 @@ async def confirm_checkin(request: CheckinRequest):
         
         if success:
             child_name = f"{session_info.get('first_name', '')} {session_info.get('last_name', '')}".strip()
+            
+            # Get attendance_id
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("SELECT id FROM attendance WHERE child_id = :child_id ORDER BY created_at DESC LIMIT 1"), {"child_id": session_info['child_id']})
+                row = result.fetchone()
+                attendance_id = row[0] if row else None
+            
+            # Get label payload
+            label_payload = await get_print_payload(attendance_id) if attendance_id else None
+            
             await Database.log_event("info", "api", "Check-in confirmed", 
                                    details=f"Child: {child_name}, Volunteer: {request.created_by}")
             
-            return CheckinResponse(
-                success=True,
-                message=f"{child_name} checked in successfully!",
-                child_name=child_name
-            )
+            return {
+                "success": True,
+                "message": f"{child_name} checked in successfully!",
+                "attendance_id": attendance_id,
+                "label_payload": label_payload
+            }
         else:
             await Database.log_event("error", "api", "Failed to confirm check-in", 
                                    details=f"Session: {request.session_id}")
-            return CheckinResponse(
-                success=False,
-                message="Failed to check in. Please try again."
-            )
+            return {
+                "success": False,
+                "message": "Failed to check in. Please try again."
+            }
             
     except Exception as e:
         await Database.log_event("error", "api", f"Error confirming check-in: {str(e)}", 
                                details=f"Session: {request.session_id}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/checkin-direct")
+async def direct_checkin(request: DirectCheckinRequest, current_user: dict = Depends(get_current_user)):
+    """Direct check-in from scanner search - requires auth"""
+    try:
+        # Create attendance
+        attendance_id = await Database.create_attendance(
+            child_id=request.child_id,
+            program_id=request.program_id,
+            station_id=request.station_id,
+            created_by=current_user['username']
+        )
+        
+        # Get child name
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT first_name, last_name FROM children WHERE id = :id"), {"id": request.child_id})
+            row = result.fetchone()
+            child_name = f"{row[0]} {row[1]}" if row else "Unknown Child"
+        
+        # Get label payload
+        label_payload = await get_print_payload(attendance_id)
+        
+        await Database.log_event("info", "api", f"Direct check-in: {child_name}", 
+                               details=f"Station: {request.station_id}, Volunteer: {current_user['username']}")
+        
+        return {
+            "success": True,
+            "message": f"{child_name} checked in successfully!",
+            "attendance_id": attendance_id,
+            "label_payload": label_payload
+        }
+        
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error direct check-in: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/register", response_model=RegisterResponse)
@@ -431,6 +478,11 @@ async def get_session(session_id: str):
         if not session_info:
             raise HTTPException(status_code=404, detail="Session not found or expired")
         
+        # Check expiry
+        from datetime import datetime
+        if datetime.now() > session_info['expires_at']:
+            raise HTTPException(status_code=404, detail="Session not found or expired")
+        
         # Convert to Pydantic models
         programs = [Program(**p) for p in session_info["programs"]]
         child_info = ChildInfo(**session_info["child_info"])
@@ -441,6 +493,8 @@ async def get_session(session_id: str):
             programs=programs
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         await Database.log_event("error", "api", f"Error getting session: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -562,6 +616,9 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
         existing = await Database.get_user_by_username(request.username)
         if existing:
             raise HTTPException(status_code=400, detail="Username already exists")
+        
+        # Ensure role is set
+        request.role = request.role or "volunteer"
         
         # Generate random password
         password = secrets.token_urlsafe(12)
@@ -786,65 +843,68 @@ async def get_all_children(current_user: dict = Depends(get_current_user)):
         await Database.log_event("error", "api", f"Error getting children: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/api/qr/{qr_value}")
-async def get_qr_code(qr_value: str, child_name: str = None):
-    """Generate and return QR code image"""
+@app.get("/api/print_payload/{attendance_id}")
+async def get_print_payload(attendance_id: int):
+    """Get printable label payload for attendance"""
     try:
-        # Generate QR code
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_value)
-        qr.make(fit=True)
-
-        # Create QR code image
-        qr_img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to RGB if needed
-        if qr_img.mode != 'RGB':
-            qr_img = qr_img.convert('RGB')
-        
-        # Create a larger image with padding for text
-        width, height = qr_img.size
-        new_height = height + 60  # Space for text
-        img = Image.new('RGB', (width, new_height), 'white')
-        img.paste(qr_img, (0, 0))
-        
-        # Add text below QR code
-        draw = ImageDraw.Draw(img)
-        try:
-            # Try to use a default font, fallback to basic if not available
-            font = ImageFont.truetype("arial.ttf", 20)
-        except:
-            font = ImageFont.load_default()
-        
-        if child_name:
-            # Center the text
-            bbox = draw.textbbox((0, 0), child_name, font=font)
-            text_width = bbox[2] - bbox[0]
-            text_x = (width - text_width) // 2
-            draw.text((text_x, height + 10), child_name, fill='black', font=font)
-        
-        # Save to BytesIO
-        img_io = BytesIO()
-        img.save(img_io, 'JPEG', quality=95)
-        img_io.seek(0)
-        
-        # Create filename
-        filename = f"{child_name.replace(' ', '_')}_QR.jpg" if child_name else "QR.jpg"
-        
-        return Response(
-            img_io.getvalue(),
-            media_type='image/jpeg',
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-        
+        async with AsyncSessionLocal() as db:
+            # Get attendance with child info
+            result = await db.execute(text("""
+                SELECT a.*, c.first_name, c.last_name, c.birth_date, f.family_name
+                FROM attendance a
+                JOIN children c ON a.child_id = c.id
+                JOIN families f ON c.family_id = f.id
+                WHERE a.id = :attendance_id
+            """), {"attendance_id": attendance_id})
+            attendance = result.fetchone()
+            if not attendance:
+                raise HTTPException(status_code=404, detail="Attendance not found")
+            
+            # Get parents
+            parents_result = await db.execute(text("""
+                SELECT first_name, last_name, phone, relationship
+                FROM parents
+                WHERE family_id = (SELECT family_id FROM children WHERE id = :child_id)
+            """), {"child_id": attendance.child_id})
+            parents = parents_result.fetchall()
+            
+            # Calculate age
+            from datetime import date
+            birth_date = date.fromisoformat(attendance.birth_date)
+            today = date.today()
+            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            
+            # Create vCard
+            vcard = f"""BEGIN:VCARD
+VERSION:3.0
+N:{attendance.last_name};{attendance.first_name};;;
+FN:{attendance.first_name} {attendance.last_name}
+TEL;TYPE=CELL:{parents[0].phone if parents else ''}
+END:VCARD"""
+            
+            # Generate QR for vCard
+            import qrcode
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(vcard)
+            qr.make(fit=True)
+            img = qr.make_image(fill='black', back_color='white')
+            buf = BytesIO()
+            img.save(buf, format='PNG')
+            qr_b64 = base64.b64encode(buf.getvalue()).decode()
+            
+            # Label payload
+            label_payload = {
+                "child_name": f"{attendance.first_name} {attendance.last_name}",
+                "age": age,
+                "family_name": attendance.family_name,
+                "parents": [{"name": f"{p.first_name} {p.last_name}", "phone": p.phone, "relationship": p.relationship} for p in parents],
+                "qr_b64": qr_b64
+            }
+            
+            return label_payload
     except Exception as e:
-        await Database.log_event("error", "api", f"Error generating QR code: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error generating QR code")
+        await Database.log_event("error", "api", f"Error getting print payload: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/admin/volunteers")
 async def admin_volunteers_page(request: Request, current_user: dict = Depends(get_current_user)):
@@ -896,6 +956,11 @@ async def register_page(request: Request):
 async def confirm_page(request: Request):
     """Confirmation page"""
     return templates.TemplateResponse("confirm.html", {"request": request})
+
+@app.get("/success")
+async def success_page(request: Request):
+    """Success page"""
+    return templates.TemplateResponse("success.html", {"request": request})
 
 if __name__ == "__main__":
     import uvicorn

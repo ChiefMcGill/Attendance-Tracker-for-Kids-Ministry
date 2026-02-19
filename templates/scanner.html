@@ -454,11 +454,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showStatus('Check-in successful! Ready for next child.', 'success');
-                    closeModal();
-                    // Clear search
-                    document.getElementById('searchInput').value = '';
-                    document.getElementById('searchResults').innerHTML = '';
+                    localStorage.setItem('label_payload', JSON.stringify(data.label_payload));
+                    window.location.href = '/success';
                 } else {
                     showStatus(data.message, 'error');
                 }

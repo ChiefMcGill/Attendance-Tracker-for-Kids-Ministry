@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kids Ministry Check-in - Success</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Kids Ministry Check-in</h1>
+        <p>Check-in Successful</p>
+    </div>
+
+    <div class="main-container">
+        <div class="success-container">
+            <h2>Child Checked In!</h2>
+            <div id="label-preview" class="label-preview">
+                <!-- Label content will be inserted here -->
+            </div>
+            <button id="return-btn" class="btn">Return to Scanner</button>
+            <p class="auto-redirect">Auto-redirecting to scanner in <span id="countdown">30</span> seconds...</p>
+        </div>
+    </div>
+
+    <script>
+        // Get label payload from localStorage
+        const labelPayload = JSON.parse(localStorage.getItem('label_payload'));
+        if (labelPayload) {
+            displayLabel(labelPayload);
+            localStorage.removeItem('label_payload'); // Clean up
+        }
+
+        function displayLabel(data) {
+            const container = document.getElementById('label-preview');
+            container.innerHTML = `
+                <div class="label-section">
+                    <div class="label-child-name">${data.child_name}</div>
+                    <div class="label-details">
+                        <div>Age: ${data.age}</div>
+                        <div>Family: ${data.family_name}</div>
+                        <div class="label-parents">
+                            ${data.parents.map(p => `<div>${p.name} (${p.relationship}) - ${p.phone}</div>`).join('')}
+                        </div>
+                    </div>
+                    <div class="label-qr">
+                        <img src="data:image/png;base64,${data.qr_b64}" alt="QR Code for contact" />
+                    </div>
+                </div>
+            `;
+        }
+
+        // Countdown and auto redirect
+        let countdown = 30;
+        const countdownEl = document.getElementById('countdown');
+        const interval = setInterval(() => {
+            countdown--;
+            countdownEl.textContent = countdown;
+            if (countdown <= 0) {
+                clearInterval(interval);
+                window.location.href = '/';
+            }
+        }, 1000);
+
+        // Return button
+        document.getElementById('return-btn').addEventListener('click', () => {
+            window.location.href = '/';
+        });
+    </script>
+</body>
+</html>
