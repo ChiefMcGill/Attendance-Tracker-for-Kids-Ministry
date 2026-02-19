@@ -821,6 +821,21 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "last_name": current_user.get('last_name', ''),
         "role": current_user['role']
     }
+
+@app.post("/api/setup_2fa")
+async def setup_2fa(request: Setup2FARequest):
+    user = await Database.get_user_by_username(request.username)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+    totp = pyotp.TOTP(request.totp_secret)
+    if not totp.verify(request.otp):
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+    await Database.update_volunteer_2fa(user['id'], request.totp_secret, True)
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user['username']}, expires_delta=access_token_expires
+    )
+    return {"success": True, "token": access_token, "role": user['role']}
 async def get_all_programs(current_user: dict = Depends(get_current_user)):
     """Get all programs including inactive ones - Admin only"""
     if current_user['role'] != 'admin':

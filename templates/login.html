@@ -151,11 +151,31 @@
         </div>
     </div>
 
+    <div id="setup2fa" style="display: none;">
+        <div class="main-container">
+            <div class="login-container">
+                <h3>Set up Two-Factor Authentication</h3>
+                <p>Scan this QR code with your authenticator app:</p>
+                <div id="qrCode" style="text-align: center; margin: 1rem 0;"></div>
+                <p>Or enter this code manually: <strong id="manualCode"></strong></p>
+                <div class="form-group">
+                    <label for="setupOtp">Enter the 6-digit code from your app</label>
+                    <input type="text" id="setupOtp" name="setupOtp" maxlength="6" placeholder="000000">
+                </div>
+                <button class="btn" id="completeSetupBtn">Complete Setup</button>
+                <div id="setupMessage" class="message" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const form = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
         const otpGroup = document.getElementById('otpGroup');
         const messageDiv = document.getElementById('message');
+
+        let setupUsername = '';
+        let setupTotpSecret = '';
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -192,6 +212,22 @@
                     setTimeout(() => {
                         window.location.href = redirectUrl;
                     }, 1000);
+                } else if (data.setup_2fa) {
+                    setupUsername = username;
+                    setupTotpSecret = data.totp_secret;
+                    document.querySelector('.login-container').style.display = 'none';
+                    document.getElementById('setup2fa').style.display = 'block';
+                    const otpauth = `otpauth://totp/Kids%20Ministry:${username}?secret=${data.totp_secret}&issuer=Kids%20Ministry`;
+                    document.getElementById('manualCode').textContent = data.totp_secret;
+                    fetch('/api/qr/' + encodeURIComponent(otpauth))
+                    .then(res => res.text())
+                    .then(svg => {
+                        document.getElementById('qrCode').innerHTML = svg;
+                    })
+                    .catch(err => {
+                        console.error('Error loading QR code:', err);
+                        showSetupMessage('Error loading QR code. Use manual code.', 'error');
+                    });
                 } else if (data.requires_2fa) {
                     otpGroup.style.display = 'block';
                     document.getElementById('otp').focus();
@@ -207,10 +243,58 @@
             }
         });
 
+        document.getElementById('completeSetupBtn').addEventListener('click', async () => {
+            const otp = document.getElementById('setupOtp').value.trim();
+            if (!otp || otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+                showSetupMessage('Please enter a valid 6-digit code', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('completeSetupBtn');
+            btn.disabled = true;
+            btn.textContent = 'Setting up...';
+
+            try {
+                const response = await fetch('/api/setup_2fa', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        otp: otp,
+                        totp_secret: setupTotpSecret,
+                        username: setupUsername
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    localStorage.setItem('authToken', data.token);
+                    showSetupMessage('2FA setup complete! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = data.role === 'admin' ? '/admin' : '/scanner';
+                    }, 1000);
+                } else {
+                    showSetupMessage(data.detail || 'Setup failed', 'error');
+                }
+            } catch (error) {
+                showSetupMessage('Setup failed. Please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Complete Setup';
+            }
+        });
+
         function showMessage(text, type) {
             messageDiv.textContent = text;
             messageDiv.className = `message ${type}`;
             messageDiv.style.display = 'block';
+        }
+
+        function showSetupMessage(text, type) {
+            const msgDiv = document.getElementById('setupMessage');
+            msgDiv.textContent = text;
+            msgDiv.className = `message ${type}`;
+            msgDiv.style.display = 'block';
         }
 
         // Check if already logged in

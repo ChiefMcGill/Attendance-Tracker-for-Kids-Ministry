@@ -8,11 +8,10 @@ class ScanRequest(BaseModel):
     station_id: str
     device_id: str
 
-class CheckinRequest(BaseModel):
-    session_id: str
-    station_id: str
-    device_id: str
-    created_by: Optional[str] = None
+class Setup2FARequest(BaseModel):
+    otp: str
+    totp_secret: str
+    username: str
 
 class RegisterRequest(BaseModel):
     parent_first_name: str
