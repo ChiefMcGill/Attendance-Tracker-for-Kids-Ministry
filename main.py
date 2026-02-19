@@ -1,7 +1,7 @@
 import os
 import uuid
 import secrets
-from database import Database
+from database import verify_password, get_password_hash
 from database import init_database
 from database import get_db
 from database import AsyncSessionLocal
@@ -50,7 +50,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # Auth configuration
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -64,7 +63,6 @@ def validate_station(station_id: str) -> bool:
     return station_id in STATION_TOKENS
 
 # Auth utilities
-def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password):
