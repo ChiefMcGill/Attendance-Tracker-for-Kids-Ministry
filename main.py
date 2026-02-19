@@ -869,10 +869,15 @@ async def get_print_payload(attendance_id: int):
             parents = parents_result.fetchall()
             
             # Calculate age
-            from datetime import date
-            birth_date = date.fromisoformat(attendance.birth_date)
-            today = date.today()
-            age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+            try:
+                if attendance.birth_date:
+                    birth_date = date.fromisoformat(attendance.birth_date)
+                    today = date.today()
+                    age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+                else:
+                    age = "Unknown"
+            except:
+                age = "Unknown"
             
             # Create vCard
             vcard = f"""BEGIN:VCARD
