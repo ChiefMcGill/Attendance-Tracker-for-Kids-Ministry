@@ -64,6 +64,16 @@ async def init_database():
             if statement:  # Skip empty statements
                 conn.execute(text(statement))
         
+        # Add missing columns for migrations (if table already exists)
+        try:
+            conn.execute(text("ALTER TABLE volunteers ADD COLUMN totp_secret TEXT"))
+        except:
+            pass  # Column might already exist
+        try:
+            conn.execute(text("ALTER TABLE volunteers ADD COLUMN enabled_2fa BOOLEAN DEFAULT FALSE"))
+        except:
+            pass  # Column might already exist
+        
         conn.commit()
     
     # Seed initial data if needed
