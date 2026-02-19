@@ -5,6 +5,7 @@ from database import verify_password, get_password_hash
 from database import init_database
 from database import get_db
 from database import AsyncSessionLocal
+from database import Database
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -101,7 +102,7 @@ async def startup_event():
     """Initialize database on startup"""
     from database import init_database
     await init_database()
-    await Database.log_event("info", "api", "Application started")
+    Database.log_event("info", "api", "Application started")
 
 @app.get("/")
 async def root(request: Request):
@@ -162,13 +163,13 @@ async def checkin_direct(request: DirectCheckinRequest, current_user: dict = Dep
             row = result.fetchone()
             child_name = f"{row[0]} {row[1]}" if row else "Unknown"
         
-        await Database.log_event("info", "api", "Direct check-in", 
+        Database.log_event("info", "api", "Direct check-in", 
                                details=f"Child: {child_name}, Volunteer: {current_user['username']}")
         
         return CheckinResponse(success=True, message=f"{child_name} checked in successfully!", child_name=child_name)
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error direct check-in: {str(e)}")
+        Database.log_event("error", "api", f"Error direct check-in: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/scan", response_model=ScanResponse)
@@ -182,7 +183,7 @@ async def scan_qr_code(request: ScanRequest):
     try:
         # Validate station
         if not validate_station(request.station_id):
-            await Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}", 
+            Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}", 
                                    details=f"Device: {request.device_id}")
             return ScanResponse(
                 success=False,
@@ -193,7 +194,7 @@ async def scan_qr_code(request: ScanRequest):
         child_info = await Database.get_child_by_qr(request.qr_value)
         
         if not child_info:
-            await Database.log_event("warning", "api", "QR code not found", 
+            Database.log_event("warning", "api", "QR code not found", 
                                    details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
             return ScanResponse(
                 success=False,
@@ -215,7 +216,7 @@ async def scan_qr_code(request: ScanRequest):
             device_id=request.device_id
         )
         
-        await Database.log_event("info", "api", "QR code scanned successfully", 
+        Database.log_event("info", "api", "QR code scanned successfully", 
                                details=f"Child: {child_info['first_name']} {child_info['last_name']}, Session: {session_id}")
         
         return ScanResponse(
@@ -227,7 +228,7 @@ async def scan_qr_code(request: ScanRequest):
         )
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error scanning QR code: {str(e)}", 
+        Database.log_event("error", "api", f"Error scanning QR code: {str(e)}", 
                                details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -241,7 +242,7 @@ async def confirm_checkin(request: CheckinRequest):
     try:
         # Validate station
         if not validate_station(request.station_id):
-            await Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}")
+            Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}")
             return CheckinResponse(
                 success=False,
                 message="Invalid station ID"
@@ -251,7 +252,7 @@ async def confirm_checkin(request: CheckinRequest):
         session_info = await Database.get_checkin_session(request.session_id)
         
         if not session_info:
-            await Database.log_event("warning", "api", "Invalid or expired session", 
+            Database.log_event("warning", "api", "Invalid or expired session", 
                                    details=f"Session: {request.session_id}")
             return CheckinResponse(
                 success=False,
@@ -267,7 +268,7 @@ async def confirm_checkin(request: CheckinRequest):
         
         if success:
             child_name = f"{session_info.get('first_name', '')} {session_info.get('last_name', '')}".strip()
-            await Database.log_event("info", "api", "Check-in confirmed", 
+            Database.log_event("info", "api", "Check-in confirmed", 
                                    details=f"Child: {child_name}, Volunteer: {request.created_by}")
             
             return CheckinResponse(
@@ -276,7 +277,7 @@ async def confirm_checkin(request: CheckinRequest):
                 child_name=child_name
             )
         else:
-            await Database.log_event("error", "api", "Failed to confirm check-in", 
+            Database.log_event("error", "api", "Failed to confirm check-in", 
                                    details=f"Session: {request.session_id}")
             return CheckinResponse(
                 success=False,
@@ -284,7 +285,7 @@ async def confirm_checkin(request: CheckinRequest):
             )
             
     except Exception as e:
-        await Database.log_event("error", "api", f"Error confirming check-in: {str(e)}", 
+        Database.log_event("error", "api", f"Error confirming check-in: {str(e)}", 
                                details=f"Session: {request.session_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -354,7 +355,7 @@ async def register_new_child(request: RegisterRequest, current_user: dict = Depe
         )
         
         child_name = f"{request.child_first_name} {request.child_last_name}"
-        await Database.log_event("info", "api", f"New child registered and checked in: {child_name}", 
+        Database.log_event("info", "api", f"New child registered and checked in: {child_name}", 
                                details=f"Volunteer: {current_user['username']}")
         
         return RegisterResponse(
@@ -366,7 +367,7 @@ async def register_new_child(request: RegisterRequest, current_user: dict = Depe
         
     except Exception as e:
         print(f"Registration error: {str(e)}")  # Debug print
-        await Database.log_event("error", "api", f"Error registering child: {str(e)}")
+        Database.log_event("error", "api", f"Error registering child: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/child/{child_id}/qr")
@@ -432,7 +433,7 @@ async def get_session(session_id: str):
         )
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting session: {str(e)}")
+        Database.log_event("error", "api", f"Error getting session: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/attendance/download")
@@ -488,7 +489,7 @@ async def download_attendance(current_user: dict = Depends(get_current_user)):
             )
             
     except Exception as e:
-        await Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
+        Database.log_event("error", "api", f"Error downloading attendance: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/volunteers")
@@ -501,7 +502,7 @@ async def get_volunteers(current_user: dict = Depends(get_current_user)):
         volunteers = await Database.get_all_volunteers()
         return volunteers
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting volunteers: {str(e)}")
+        Database.log_event("error", "api", f"Error getting volunteers: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/volunteers")
@@ -536,7 +537,7 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
         await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
         
         # Log event
-        await Database.log_event("info", "api", f"New volunteer created: {request.username}", 
+        Database.log_event("info", "api", f"New volunteer created: {request.username}", 
                                details=f"Created by: {current_user['username']}")
         
         return {
@@ -550,7 +551,7 @@ async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depen
     except HTTPException:
         raise
     except Exception as e:
-        await Database.log_event("error", "api", f"Error creating volunteer: {str(e)}")
+        Database.log_event("error", "api", f"Error creating volunteer: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.put("/api/volunteers/{volunteer_id}")
@@ -585,13 +586,13 @@ async def update_volunteer(volunteer_id: int, request: UpdateVolunteerRequest, c
         if updates:
             await Database.update_volunteer(volunteer_id, updates)
         
-        await Database.log_event("info", "api", f"Volunteer {volunteer_id} updated", 
+        Database.log_event("info", "api", f"Volunteer {volunteer_id} updated", 
                                details=f"Updated by: {current_user['username']}")
         
         return {"success": True, "message": "Volunteer updated successfully"}
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error updating volunteer: {str(e)}")
+        Database.log_event("error", "api", f"Error updating volunteer: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.delete("/api/volunteers/{volunteer_id}")
@@ -610,7 +611,7 @@ async def delete_volunteer(volunteer_id: int, current_user: dict = Depends(get_c
         
         await Database.delete_volunteer(volunteer_id)
         
-        await Database.log_event("info", "api", f"Volunteer {volunteer_id} deleted", 
+        Database.log_event("info", "api", f"Volunteer {volunteer_id} deleted", 
                                details=f"Deleted by: {current_user['username']}")
         
         return {"success": True, "message": "Volunteer deleted successfully"}
@@ -618,7 +619,7 @@ async def delete_volunteer(volunteer_id: int, current_user: dict = Depends(get_c
     except HTTPException:
         raise
     except Exception as e:
-        await Database.log_event("error", "api", f"Error deleting volunteer: {str(e)}")
+        Database.log_event("error", "api", f"Error deleting volunteer: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/programs/all")
@@ -634,7 +635,7 @@ async def get_all_programs(current_user: dict = Depends(get_current_user)):
             columns = result.keys()
             return [dict(zip(columns, row)) for row in rows]
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting programs: {str(e)}")
+        Database.log_event("error", "api", f"Error getting programs: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/programs")
@@ -653,7 +654,7 @@ async def add_program(request: AddProgramRequest, current_user: dict = Depends(g
         
         program_id = await Database.create_program(request.name, request.min_age, request.max_age)
         
-        await Database.log_event("info", "api", f"New program created: {request.name}", 
+        Database.log_event("info", "api", f"New program created: {request.name}", 
                                details=f"Created by: {current_user['username']}")
         
         return {
@@ -665,7 +666,7 @@ async def add_program(request: AddProgramRequest, current_user: dict = Depends(g
     except HTTPException:
         raise
     except Exception as e:
-        await Database.log_event("error", "api", f"Error creating program: {str(e)}")
+        Database.log_event("error", "api", f"Error creating program: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.put("/api/programs/{program_id}")
@@ -688,13 +689,13 @@ async def update_program(program_id: int, request: UpdateProgramRequest, current
         if updates:
             await Database.update_program(program_id, updates)
         
-        await Database.log_event("info", "api", f"Program {program_id} updated", 
+        Database.log_event("info", "api", f"Program {program_id} updated", 
                                details=f"Updated by: {current_user['username']}")
         
         return {"success": True, "message": "Program updated successfully"}
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error updating program: {str(e)}")
+        Database.log_event("error", "api", f"Error updating program: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.delete("/api/programs/{program_id}")
@@ -706,13 +707,13 @@ async def delete_program(program_id: int, current_user: dict = Depends(get_curre
     try:
         await Database.delete_program(program_id)
         
-        await Database.log_event("info", "api", f"Program {program_id} deleted", 
+        Database.log_event("info", "api", f"Program {program_id} deleted", 
                                details=f"Deleted by: {current_user['username']}")
         
         return {"success": True, "message": "Program deleted successfully"}
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error deleting program: {str(e)}")
+        Database.log_event("error", "api", f"Error deleting program: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/children")
@@ -736,7 +737,7 @@ async def get_all_children(current_user: dict = Depends(get_current_user)):
             children = [dict(zip(columns, row)) for row in rows]
             return children
     except Exception as e:
-        await Database.log_event("error", "api", f"Error getting children: {str(e)}")
+        Database.log_event("error", "api", f"Error getting children: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/qr/{qr_value}")
@@ -796,7 +797,7 @@ async def get_qr_code(qr_value: str, child_name: str = None):
         )
         
     except Exception as e:
-        await Database.log_event("error", "api", f"Error generating QR code: {str(e)}")
+        Database.log_event("error", "api", f"Error generating QR code: {str(e)}")
         raise HTTPException(status_code=500, detail="Error generating QR code")
 
 @app.get("/admin/volunteers")
