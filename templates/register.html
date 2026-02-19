@@ -297,15 +297,6 @@
     <div class="main-container">
         <div class="register-container">
             <form id="registration-form">
-                <!-- Family Information -->
-                <div class="form-section">
-                    <h2>Family Information</h2>
-                    <div class="form-group">
-                        <label for="family-name">Family Name <span class="required">*</span></label>
-                        <input type="text" id="family-name" name="family_name" required>
-                    </div>
-                </div>
-
                 <!-- Parent/Guardian Information -->
                 <div class="form-section">
                     <h2>Parent/Guardian Information</h2>
@@ -529,7 +520,6 @@
                 parent_phone: formData.get('parent_phone'),
                 parent_email: formData.get('parent_email'),
                 parent_relationship: formData.get('parent_relationship'),
-                family_name: formData.get('family_name'),
                 child_first_name: formData.get('child_first_name'),
                 child_last_name: formData.get('child_last_name'),
                 child_birth_year: parseInt(formData.get('child_birth_year')),
@@ -565,7 +555,6 @@
 
         function validateForm() {
             const requiredFields = [
-                'family-name',
                 'parent-first-name', 'parent-last-name', 'parent-phone', 'parent-relationship',
                 'child-first-name', 'child-last-name', 'child-birth-year', 'child-birth-month', 'child-birth-day',
                 'program'

@@ -20,7 +20,6 @@ class RegisterRequest(BaseModel):
     parent_phone: str
     parent_email: str
     parent_relationship: str
-    family_name: str
     child_first_name: str
     child_last_name: str
     child_birth_year: int

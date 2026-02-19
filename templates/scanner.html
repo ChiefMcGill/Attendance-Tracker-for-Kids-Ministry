@@ -95,10 +95,12 @@
             background: #10b981;
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 0.9rem;
+            font-weight: bold;
+            transition: background 0.3s;
         }
 
         .checkin-btn:hover {
@@ -410,7 +412,7 @@
                         <strong>${child.first_name} ${child.last_name}</strong><br>
                         <small>${child.family_name}</small>
                     </div>
-                    <button class="checkin-btn" onclick="openCheckinModal(${child.id}, '${child.first_name} ${child.last_name}')">Check In</button>
+                    <button class="checkin-btn" onclick="openCheckinModal(${child.id}, '${child.first_name} ${child.last_name}')">&check; Check In</button>
                 </div>
             `).join('');
         }
@@ -452,7 +454,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showStatus(data.message, 'success');
+                    showStatus('Check-in successful! Ready for next child.', 'success');
                     closeModal();
                     // Clear search
                     document.getElementById('searchInput').value = '';

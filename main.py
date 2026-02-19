@@ -46,6 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SessionMiddleware, secret_key="your-secret-key-here")
+
 # Static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -79,22 +81,24 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    credentials_exception = HTTPException(
-        status_code=401,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+async def get_current_user(request: Request):
+    token = request.session.get('token')
+    if not token:
+        authorization = request.headers.get("Authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = str(payload.get("sub"))
         if username is None:
-            raise credentials_exception
+            raise HTTPException(status_code=401, detail="Not authenticated")
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="Not authenticated")
     user = await Database.get_user_by_username(username)
     if user is None:
-        raise credentials_exception
+        raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
 @app.on_event("startup")
@@ -114,24 +118,25 @@ async def health_check():
     from datetime import datetime
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-@app.post("/api/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
-    user = await Database.get_user_by_username(request.username)
+@app.post("/api/login")
+async def login(request: Request, login_data: LoginRequest):
+    user = await Database.get_user_by_username(login_data.username)
     if not user:
-        return LoginResponse(success=False, message="Invalid username or password")
-    if not verify_password(request.password, user['password_hash']):
-        return LoginResponse(success=False, message="Invalid username or password")
+        return {"success": False, "message": "Invalid username or password"}
+    if not verify_password(login_data.password, user['password_hash']):
+        return {"success": False, "message": "Invalid username or password"}
     if user['enabled_2fa']:
-        if not request.otp:
-            return LoginResponse(success=False, message="2FA required", requires_2fa=True)
+        if not login_data.otp:
+            return {"success": False, "message": "2FA required", "requires_2fa": True}
         totp = pyotp.TOTP(user['totp_secret'])
-        if not totp.verify(request.otp):
-            return LoginResponse(success=False, message="Invalid 2FA code")
+        if not totp.verify(login_data.otp):
+            return {"success": False, "message": "Invalid 2FA code"}
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
-    return LoginResponse(success=True, message="Login successful", token=access_token, role=user['role'])
+    request.session['token'] = access_token
+    return {"success": True, "message": "Login successful", "token": access_token, "role": user['role']}
 
 @app.get("/api/search-children")
 async def search_children(query: str, current_user: dict = Depends(get_current_user)):
@@ -327,7 +332,7 @@ async def register_new_child(request: RegisterRequest, current_user: dict = Depe
         }
         
         family_data = {
-            "family_name": request.family_name
+            "family_name": request.parent_last_name + " Family"
         }
         
         parent_data = {
