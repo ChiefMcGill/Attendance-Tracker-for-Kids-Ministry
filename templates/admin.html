@@ -46,6 +46,24 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .nav {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         .dashboard-container {
             max-width: 1200px;
             margin: 2rem auto;
@@ -133,7 +151,6 @@
         <a href="/admin/programs">Programs</a>
         <a href="/admin/attendance">Attendance</a>
         <a href="/admin/qrcodes">QR Codes</a>
-        <a href="/admin/recovery">Recovery</a>
     </div>
 
     <div class="dashboard-container">
@@ -168,6 +185,10 @@
                 <button class="btn btn-secondary" onclick="alert('Coming soon')">Registration Settings</button>
             </div>
         </div>
+    </div>
+
+    <div class="version-info">
+        v0.0001
     </div>
 
     <script>

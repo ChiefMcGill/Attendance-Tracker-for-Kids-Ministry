@@ -299,6 +299,13 @@
                     <label>Temporary Password</label>
                     <div id="tempPassword" style="padding: 0.75rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; font-family: monospace;"></div>
                 </div>
+                <div class="form-group" id="recoveryGroup" style="display: none;">
+                    <label>Account Recovery</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary" onclick="resetVolunteerPassword()">Reset Password</button>
+                        <button type="button" class="btn btn-secondary" onclick="disableVolunteer2FA()">Disable 2FA</button>
+                    </div>
+                </div>
                 <button type="submit" class="btn" id="submitBtn">Add Volunteer</button>
                 <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             </form>
@@ -350,7 +357,10 @@
         }
 
         function displayVolunteers() {
-            const tableHtml = `
+            const activeVolunteers = volunteers.filter(v => v.active);
+            const inactiveVolunteers = volunteers.filter(v => !v.active);
+            
+            const activeTableHtml = activeVolunteers.length > 0 ? `
                 <table class="volunteers-table">
                     <thead>
                         <tr>
@@ -363,7 +373,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        ${volunteers.map(volunteer => `
+                        ${activeVolunteers.map(volunteer => `
                             <tr>
                                 <td>${volunteer.username}</td>
                                 <td>${volunteer.first_name} ${volunteer.last_name}</td>
@@ -378,8 +388,39 @@
                         `).join('')}
                     </tbody>
                 </table>
-            `;
-            document.getElementById('volunteersTable').innerHTML = tableHtml;
+            ` : '<p>No active volunteers found.</p>';
+
+            const inactiveTableHtml = inactiveVolunteers.length > 0 ? `
+                <h3>Deleted Users</h3>
+                <table class="volunteers-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>2FA</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${inactiveVolunteers.map(volunteer => `
+                            <tr>
+                                <td>${volunteer.username}</td>
+                                <td>${volunteer.first_name} ${volunteer.last_name}</td>
+                                <td>${volunteer.role}</td>
+                                <td>${volunteer.enabled_2fa ? 'Enabled' : 'Disabled'}</td>
+                                <td>${volunteer.active ? 'Active' : 'Inactive'}</td>
+                                <td>
+                                    <button class="btn" onclick="enableVolunteer(${volunteer.id})">Enable</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            ` : '';
+
+            document.getElementById('volunteersTable').innerHTML = activeTableHtml + inactiveTableHtml;
         }
 
         function openAddModal() {
@@ -408,6 +449,7 @@
             document.getElementById('lastName').value = volunteer.last_name;
             document.getElementById('role').value = volunteer.role;
             document.getElementById('passwordGroup').style.display = 'none';
+            document.getElementById('recoveryGroup').style.display = 'block';
             document.getElementById('submitBtn').textContent = 'Update Volunteer';
             document.getElementById('modalMessage').style.display = 'none';
             document.getElementById('volunteerModal').style.display = 'flex';
@@ -504,6 +546,87 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert('Error deleting volunteer');
+            });
+        }
+
+        function enableVolunteer(id) {
+            if (!confirm('Are you sure you want to re-enable this volunteer?')) return;
+
+            fetch(`/api/volunteers/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ active: true })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadVolunteers();
+                } else {
+                    alert(data.message || 'Error enabling volunteer');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error enabling volunteer');
+            });
+        }
+
+        function resetVolunteerPassword() {
+            if (!currentVolunteerId) return;
+            
+            if (!confirm('Are you sure you want to reset this volunteer\'s password? A temporary password will be generated.')) return;
+
+            fetch(`/api/admin/recovery/reset-password/${currentVolunteerId}`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('tempPassword').textContent = data.new_password;
+                    document.getElementById('passwordGroup').style.display = 'block';
+                    showMessage('modalMessage', `Password reset successful. Temporary password: ${data.new_password}`, 'success');
+                } else {
+                    showMessage('modalMessage', data.message || 'Error resetting password', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('modalMessage', 'Error resetting password', 'error');
+            });
+        }
+
+        function disableVolunteer2FA() {
+            if (!currentVolunteerId) return;
+            
+            if (!confirm('Are you sure you want to disable 2FA for this volunteer?')) return;
+
+            fetch(`/api/volunteers/${currentVolunteerId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({ enabled_2fa: false })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('modalMessage', '2FA disabled successfully', 'success');
+                    setTimeout(() => {
+                        closeModal();
+                        loadVolunteers();
+                    }, 2000);
+                } else {
+                    showMessage('modalMessage', data.message || 'Error disabling 2FA', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('modalMessage', 'Error disabling 2FA', 'error');
             });
         }
 

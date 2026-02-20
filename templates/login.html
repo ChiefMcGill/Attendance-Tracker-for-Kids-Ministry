@@ -131,12 +131,12 @@
             <form id="loginForm">
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" name="username" required>
+                    <input type="text" id="username" name="username" required autocomplete="username">
                 </div>
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
                 </div>
 
                 <div class="form-group otp-group" id="otpGroup">
@@ -164,6 +164,10 @@
         </div>
     </div>
 
+    <div class="version-info">
+        v0.0001
+    </div>
+
     <script>
         const form = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
@@ -181,6 +185,11 @@
         });
 
         form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const otp = document.getElementById('otp').value.trim();
 
             loginBtn.disabled = true;
             loginBtn.textContent = 'Logging in...';

@@ -249,6 +249,36 @@
             font-size: 0.9rem;
         }
 
+        .version-info {
+            position: fixed;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            color: #666;
+            font-family: monospace;
+        }
+
+        .nav {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         @media (max-width: 768px) {
             .scanner-container {
                 padding: 1rem;
@@ -302,6 +332,10 @@
 
     <div class="station-info">
         Station: <span id="station-id">Loading...</span>
+    </div>
+
+    <div class="version-info">
+        v0.0001
     </div>
 
     <script>
