@@ -207,6 +207,29 @@
                     <button type="submit" class="btn" id="changePasswordBtn">Change Password</button>
                 </form>
             </div>
+
+            <div class="section">
+                <h2>Two-Factor Authentication</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enable2FA" onchange="toggle2FA()">
+                        Enable 2FA (TOTP)
+                    </label>
+                    <p class="password-requirements">
+                        Two-factor authentication adds an extra layer of security to your account.
+                        You'll need to use an authenticator app to generate codes when logging in.
+                    </p>
+                </div>
+                <div id="qrCodeSection" style="display: none;">
+                    <p>Scan this QR code with your authenticator app:</p>
+                    <div id="qrCodeContainer"></div>
+                    <div class="form-group">
+                        <label for="setupCode">Enter the 6-digit code from your app:</label>
+                        <input type="text" id="setupCode" maxlength="6" pattern="[0-9]{6}">
+                        <button type="button" class="btn" onclick="complete2FASetup()">Complete Setup</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="message" class="message" style="display: none;"></div>
@@ -245,8 +268,124 @@
                 document.getElementById('firstName').value = data.first_name;
                 document.getElementById('lastName').value = data.last_name;
                 document.getElementById('email').value = data.email;
+                
+                // Load 2FA status
+                await load2FAStatus();
             } catch (error) {
                 showMessage('Failed to load profile', 'error');
+            }
+        }
+
+        // Load 2FA status
+        async function load2FAStatus() {
+            try {
+                const response = await fetch('/api/profile/2fa-status', {
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+                document.getElementById('enable2FA').checked = data.enabled;
+            } catch (error) {
+                console.error('Failed to load 2FA status:', error);
+            }
+        }
+
+        // Toggle 2FA
+        async function toggle2FA() {
+            const enabled = document.getElementById('enable2FA').checked;
+            
+            if (!enabled) {
+                // Disabling 2FA - require confirmation since we need at least 1 method
+                if (!confirm('Are you sure you want to disable 2FA? This will make your account less secure.')) {
+                    document.getElementById('enable2FA').checked = true;
+                    return;
+                }
+            }
+            
+            try {
+                if (enabled) {
+                    // Show QR code for setup
+                    await start2FASetup();
+                } else {
+                    // Disable 2FA
+                    const response = await fetch('/api/profile/disable-2fa', {
+                        method: 'POST',
+                        headers: getAuthHeaders()
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        showMessage('2FA disabled successfully', 'success');
+                        document.getElementById('qrCodeSection').style.display = 'none';
+                    } else {
+                        showMessage(data.detail || 'Failed to disable 2FA', 'error');
+                        document.getElementById('enable2FA').checked = true;
+                    }
+                }
+            } catch (error) {
+                showMessage('Failed to toggle 2FA', 'error');
+                document.getElementById('enable2FA').checked = !enabled;
+            }
+        }
+
+        // Start 2FA setup
+        async function start2FASetup() {
+            try {
+                const response = await fetch('/api/profile/setup-2fa', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+                
+                if (data.qr_code) {
+                    document.getElementById('qrCodeContainer').innerHTML = data.qr_code;
+                    document.getElementById('qrCodeSection').style.display = 'block';
+                } else {
+                    showMessage('Failed to generate QR code', 'error');
+                    document.getElementById('enable2FA').checked = false;
+                }
+            } catch (error) {
+                showMessage('Failed to start 2FA setup', 'error');
+                document.getElementById('enable2FA').checked = false;
+            }
+        }
+
+        // Complete 2FA setup
+        async function complete2FASetup() {
+            const code = document.getElementById('setupCode').value;
+            if (!code || code.length !== 6) {
+                showMessage('Please enter a valid 6-digit code', 'error');
+                return;
+            }
+            
+            // Get the secret from the setup response (stored temporarily)
+            const secret = window.currentTotpSecret;
+            if (!secret) {
+                showMessage('Setup session expired. Please try again.', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/profile/complete-2fa-setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({ code: code, secret: secret })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('2FA enabled successfully', 'success');
+                    document.getElementById('qrCodeSection').style.display = 'none';
+                    document.getElementById('setupCode').value = '';
+                    window.currentTotpSecret = null;
+                    // Reload 2FA status
+                    await load2FAStatus();
+                } else {
+                    showMessage(data.detail || 'Failed to complete 2FA setup', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to complete 2FA setup', 'error');
             }
         }
 

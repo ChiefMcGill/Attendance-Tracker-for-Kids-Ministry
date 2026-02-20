@@ -173,12 +173,14 @@
         let setupUsername = '';
         let setupTotpSecret = '';
 
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        document.getElementById('otp').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
 
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const otp = document.getElementById('otp').value;
+        form.addEventListener('submit', async (e) => {
 
             loginBtn.disabled = true;
             loginBtn.textContent = 'Logging in...';

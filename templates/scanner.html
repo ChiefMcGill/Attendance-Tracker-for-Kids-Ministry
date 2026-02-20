@@ -151,6 +151,22 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .profile-btn {
+            position: absolute;
+            top: 1rem;
+            right: 6rem;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .profile-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         #reader {
             width: 100%;
             border-radius: 10px;
@@ -248,7 +264,13 @@
     <div class="header">
         <h1>Kids Ministry Check-in</h1>
         <p>Scan QR code to check in children</p>
-        <button class="logout-btn" onclick="logout()">Logout</button>
+        <div class="nav">
+        {% if user.role == 'admin' %}
+        <a href="/admin">Admin Dashboard</a>
+        {% endif %}
+        <a href="/scanner">Scanner</a>
+        <a href="/profile">Profile</a>
+        <a href="#" onclick="logout()">Logout</a>
     </div>
 
     <div class="main-container">
@@ -273,7 +295,7 @@
             <h3>Check In Child</h3>
             <p id="childName"></p>
             <select id="programSelect"></select>
-            <button class="btn btn-primary" onclick="submitCheckin()">Check In</button>
+            <button class="btn" onclick="submitCheckin()">Check In</button>
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
         </div>
     </div>
@@ -325,9 +347,7 @@
         }
 
         function onScanSuccess(decodedText, decodedResult) {
-            // Stop scanning while processing
-            html5QrcodeScanner.pause();
-            
+            // Don't pause scanner for QR processing - we'll open modal instead
             showStatus('Processing QR code...', 'info');
             
             // Send scan to server
@@ -348,21 +368,18 @@
                 if (data.success) {
                     showStatus(`Found: ${data.child_info.first_name} ${data.child_info.last_name}`, 'success');
                     
-                    // Redirect to confirmation page with session data
-                    const params = new URLSearchParams({
-                        session_id: data.session_id,
-                        child_name: `${data.child_info.first_name} ${data.child_info.last_name}`,
-                        programs: JSON.stringify(data.programs)
-                    });
-                    
-                    setTimeout(() => {
-                        window.location.href = `/confirm?${params.toString()}`;
-                    }, 1500);
+                    // Open check-in modal directly instead of redirecting
+                    currentChild = { 
+                        id: data.child_info.id, 
+                        name: `${data.child_info.first_name} ${data.child_info.last_name}`,
+                        session_id: data.session_id 
+                    };
+                    openCheckinModal(data.child_info.id, `${data.child_info.first_name} ${data.child_info.last_name}`);
                 } else {
                     showStatus(data.message || 'QR code not recognized', 'error');
                     // Resume scanning after error
                     setTimeout(() => {
-                        html5QrcodeScanner.resume();
+                        safeResumeScanner();
                     }, 2000);
                 }
             })
@@ -371,7 +388,7 @@
                 showStatus('Connection error. Please try again.', 'error');
                 // Resume scanning after error
                 setTimeout(() => {
-                    html5QrcodeScanner.resume();
+                    safeResumeScanner();
                 }, 2000);
             });
         }
@@ -431,6 +448,34 @@
         function closeModal() {
             document.getElementById('checkinModal').style.display = 'none';
             currentChild = null;
+            // Resume scanning after modal closes
+            setTimeout(() => {
+                safeResumeScanner();
+            }, 500);
+        }
+
+        function safeResumeScanner() {
+            if (html5QrcodeScanner) {
+                try {
+                    // Check if scanner is paused before resuming
+                    html5QrcodeScanner.resume();
+                } catch (error) {
+                    // Scanner might already be running, ignore the error
+                    console.log('Scanner resume attempted (might already be running)');
+                }
+            }
+        }
+
+        function safePauseScanner() {
+            if (html5QrcodeScanner) {
+                try {
+                    // Check if scanner is scanning before pausing
+                    html5QrcodeScanner.pause();
+                } catch (error) {
+                    // Scanner might already be paused, ignore the error
+                    console.log('Scanner pause attempted (might already be paused)');
+                }
+            }
         }
 
         function submitCheckin() {
@@ -462,7 +507,7 @@
                         <p>Family: ${data.label_payload.family_name}</p>
                         <p>Parents: ${data.label_payload.parents.map(p => p.name + ' (' + p.phone + ')').join(', ')}</p>
                         <img src="data:image/png;base64,${data.label_payload.qr_b64}" alt="QR Code" style="max-width: 150px;">
-                        <br><button class="btn btn-primary" onclick="closeModal()">Done</button>
+                        <br><button class="btn" onclick="closeModal()">Done</button>
                     `;
                 } else {
                     showStatus(data.message, 'error');
@@ -521,9 +566,9 @@
         document.addEventListener('visibilitychange', function() {
             if (html5QrcodeScanner) {
                 if (document.hidden) {
-                    html5QrcodeScanner.pause();
+                    safePauseScanner();
                 } else {
-                    html5QrcodeScanner.resume();
+                    safeResumeScanner();
                 }
             }
         });

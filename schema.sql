@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS volunteers (
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     email TEXT,
-    role TEXT NOT NULL DEFAULT 'volunteer', -- 'volunteer', 'manager', 'admin'
+    role TEXT NOT NULL DEFAULT 'volunteer', -- 'volunteer', 'admin'
     totp_secret TEXT, -- For 2FA
     enabled_2fa BOOLEAN DEFAULT FALSE,
     active BOOLEAN DEFAULT TRUE,

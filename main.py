@@ -1213,9 +1213,12 @@ async def setup_2fa(request: Setup2FARequest):
     request.session['token'] = access_token
     return {"success": True, "token": access_token, "role": user['role']}
 
-@app.get("/profile")
-async def profile_page(request: Request, current_user: dict = Depends(get_current_user)):
-    return templates.TemplateResponse("profile.html", {"request": request, "user": current_user})
+@app.get("/admin/recovery")
+async def admin_recovery_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Admin recovery page - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return templates.TemplateResponse("admin_recovery.html", {"request": request, "user": current_user})
 
 @app.get("/api/profile")
 async def get_profile(current_user: dict = Depends(get_current_user)):
@@ -1227,28 +1230,53 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
         "role": current_user['role']
     }
 
-@app.put("/api/profile")
-async def update_profile(request: ProfileUpdateRequest, current_user: dict = Depends(get_current_user)):
-    updates = {}
-    if request.first_name is not None:
-        updates['first_name'] = request.first_name
-    if request.last_name is not None:
-        updates['last_name'] = request.last_name
-    if request.email is not None:
-        updates['email'] = request.email
-    if updates:
-        await Database.update_volunteer(current_user['id'], updates)
-    return {"success": True, "message": "Profile updated"}
+@app.get("/api/profile/2fa-status")
+async def get_2fa_status(current_user: dict = Depends(get_current_user)):
+    """Get current 2FA status for the user"""
+    return {
+        "enabled": current_user.get('enabled_2fa', False)
+    }
 
-@app.post("/api/change-password")
-async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
-    if not verify_password(request.current_password, current_user['password_hash']):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-    if not validate_password(request.new_password):
-        raise HTTPException(status_code=400, detail="Password does not meet strength requirements")
-    new_hash = get_password_hash(request.new_password)
-    await Database.update_volunteer(current_user['id'], {'password_hash': new_hash})
-    return {"success": True, "message": "Password changed"}
+@app.post("/api/admin/recovery/reset-password/{volunteer_id}")
+async def admin_reset_password(volunteer_id: int, current_user: dict = Depends(get_current_user)):
+    """Admin reset password for a volunteer - Admin only"""
+    try:
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized password reset attempt", 
+                                   details=f"Target: {volunteer_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Get volunteer info to verify they exist
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT username FROM volunteers WHERE id = :id"), {"id": volunteer_id})
+            row = result.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Volunteer not found")
+            target_username = row[0]
+        
+        # Generate new temporary password
+        new_password = secrets.token_urlsafe(12)
+        password_hash = get_password_hash(new_password)
+        
+        # Update password
+        await Database.update_volunteer(volunteer_id, {'password_hash': password_hash})
+        
+        await Database.log_event("info", "api", f"Password reset by admin for volunteer {target_username}", 
+                               details=f"Admin: {current_user['username']}")
+        
+        return {
+            "success": True, 
+            "message": f"Password reset for {target_username}",
+            "new_password": new_password
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in admin_reset_password: {e}")
+        await Database.log_event("error", "api", f"Failed to reset password for volunteer {volunteer_id}: {str(e)}", 
+                               details=f"Admin: {current_user['username']}")
+        raise HTTPException(status_code=500, detail="Failed to reset password")
 
 @app.get("/api/programs/all")
 async def get_all_programs(current_user: dict = Depends(get_current_user)):
@@ -1522,7 +1550,7 @@ async def scanner_page(request: Request, current_user: dict = Depends(get_curren
     """Scanner page for volunteers and admins"""
     if current_user['role'] not in ['admin', 'volunteer']:
         raise HTTPException(status_code=403, detail="Access denied")
-    return templates.TemplateResponse("scanner.html", {"request": request})
+    return templates.TemplateResponse("scanner.html", {"request": request, "user": current_user})
 
 if __name__ == "__main__":
     import uvicorn
