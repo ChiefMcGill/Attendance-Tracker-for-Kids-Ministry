@@ -159,40 +159,72 @@ class Database:
     @staticmethod
     async def log_event(level: str, category: str, message: str, details: str = None, user_id: str = None, session_id: str = None):
         """Log an event to the logs table"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("""
-                    INSERT INTO logs (level, category, message, details, user_id, session_id)
-                    VALUES (:level, :category, :message, :details, :user_id, :session_id)
-                """),
-                {
-                    "level": level,
-                    "category": category,
-                    "message": message,
-                    "details": details,
-                    "user_id": user_id,
-                    "session_id": session_id
-                }
-            )
-            await db.commit()
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        INSERT INTO logs (level, category, message, details, user_id, session_id)
+                        VALUES (:level, :category, :message, :details, :user_id, :session_id)
+                    """),
+                    {
+                        "level": level,
+                        "category": category,
+                        "message": message,
+                        "details": details,
+                        "user_id": user_id,
+                        "session_id": session_id
+                    }
+                )
+                await db.commit()
+        except Exception as e:
+            print(f"Failed to log event to database: {e}")
+            # Don't raise - logging failure shouldn't break the app
     
     @staticmethod
-    async def get_child_by_qr(qr_value: str) -> Optional[Dict[str, Any]]:
+    async def log_database_error(method_name: str, error: str, details: str = None):
+        """Log a database error"""
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        INSERT INTO event_logs (level, category, message, details, created_at)
+                        VALUES (:level, :category, :message, :details, datetime('now'))
+                    """),
+                    {
+                        "level": "error",
+                        "category": "database",
+                        "message": f"Error in {method_name}: {error}",
+                        "details": details
+                    }
+                )
+                await db.commit()
+        except Exception as e:
+            print(f"Failed to log database error: {e}")
+            # Don't raise - logging failure shouldn't break the app
         """Get child information by QR code"""
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                SELECT c.*, f.family_name, qc.qr_value
-                FROM children c
-                JOIN families f ON c.family_id = f.id
-                JOIN qr_codes qc ON c.id = qc.child_id
-                WHERE qc.qr_value = :qr_value AND qc.active = TRUE AND c.active = TRUE
-            """), {"qr_value": qr_value})
-            
-            row = result.fetchone()
-            if row:
-                columns = result.keys()
-                return dict(zip(columns, row))
-            return None
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("""
+                    SELECT c.*, f.family_name, qc.qr_value
+                    FROM children c
+                    JOIN families f ON c.family_id = f.id
+                    JOIN qr_codes qc ON c.id = qc.child_id
+                    WHERE qc.qr_value = :qr_value AND qc.active = TRUE AND c.active = TRUE
+                """), {"qr_value": qr_value})
+                
+                row = result.fetchone()
+                if row:
+                    columns = result.keys()
+                    child_data = dict(zip(columns, row))
+                    print(f"Found child by QR: {child_data.get('first_name')} {child_data.get('last_name')}")
+                    return child_data
+                else:
+                    print(f"No child found for QR: {qr_value}")
+                    return None
+        except Exception as e:
+            print(f"Error in get_child_by_qr: {e}")
+            await Database.log_database_error("get_child_by_qr", str(e), f"QR: {qr_value}")
+            raise
     
     @staticmethod
     async def create_checkin_session(session_id: str, child_id: int, program_id: int, station_id: str, device_id: str) -> bool:
@@ -383,33 +415,49 @@ class Database:
     
     @staticmethod
     async def get_user_by_username(username: str):
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT id, username, first_name, last_name, email, role, password_hash, totp_secret, enabled_2fa, active FROM volunteers WHERE username = :username"), {"username": username})
-            row = result.fetchone()
-            if row:
-                return dict(zip(['id', 'username', 'first_name', 'last_name', 'email', 'role', 'password_hash', 'totp_secret', 'enabled_2fa', 'active'], row))
-            return None
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("SELECT id, username, first_name, last_name, email, role, password_hash, totp_secret, enabled_2fa, active FROM volunteers WHERE username = :username"), {"username": username})
+                row = result.fetchone()
+                if row:
+                    user_data = dict(zip(['id', 'username', 'first_name', 'last_name', 'email', 'role', 'password_hash', 'totp_secret', 'enabled_2fa', 'active'], row))
+                    print(f"Found user: {username}")
+                    return user_data
+                else:
+                    print(f"User not found: {username}")
+                    return None
+        except Exception as e:
+            print(f"Error in get_user_by_username: {e}")
+            await Database.log_database_error("get_user_by_username", str(e), f"Username: {username}")
+            raise
     
     @staticmethod
     async def create_volunteer(username: str, password_hash: str, first_name: str, last_name: str, role: str = "volunteer") -> int:
         """Create a new volunteer"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("""
-                    INSERT INTO volunteers (username, password_hash, first_name, last_name, role)
-                    VALUES (:username, :password_hash, :first_name, :last_name, :role)
-                """),
-                {
-                    "username": username,
-                    "password_hash": password_hash,
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "role": role
-                }
-            )
-            await db.commit()
-            return (await db.execute(text("SELECT last_insert_rowid()"))).scalar()
-    
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        INSERT INTO volunteers (username, password_hash, first_name, last_name, role)
+                        VALUES (:username, :password_hash, :first_name, :last_name, :role)
+                    """),
+                    {
+                        "username": username,
+                        "password_hash": password_hash,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "role": role
+                    }
+                )
+                await db.commit()
+                result = await db.execute(text("SELECT last_insert_rowid()"))
+                volunteer_id = result.scalar()
+                print(f"Created volunteer {username} with ID {volunteer_id}")
+                return volunteer_id
+        except Exception as e:
+            print(f"Error in create_volunteer: {e}")
+            await Database.log_database_error("create_volunteer", str(e), f"Username: {username}")
+            raise
     
     @staticmethod
     async def update_volunteer_2fa(user_id: int, totp_secret: str, enabled: bool):
