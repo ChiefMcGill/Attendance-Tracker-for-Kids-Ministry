@@ -3,7 +3,6 @@ version: '3.8'
 services:
   app:
     build: 
-      context: .
       dockerfile: Dockerfile
     # Remove external port exposure - nginx handles this
     volumes:
@@ -51,7 +50,6 @@ services:
 
   worker:
     build: 
-      context: .
       dockerfile: Dockerfile
     command: python worker.py
     volumes:
