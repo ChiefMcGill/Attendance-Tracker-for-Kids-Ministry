@@ -173,7 +173,7 @@ async def setup_2fa_endpoint(request: Setup2FARequest):
         return {"success": False, "message": "2FA not initialized"}
     
     totp = pyotp.TOTP(user['totp_secret'])
-    if not totp.verify(request.totp_code):
+    if not totp.verify(request.otp):
         return {"success": False, "message": "Invalid 2FA code"}
     
     # Enable 2FA
