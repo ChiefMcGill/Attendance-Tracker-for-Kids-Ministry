@@ -5,12 +5,6 @@ import re
 import base64
 from jose import jwt
 import pyotp
-from database import verify_password, get_password_hash
-from database import init_database
-from database import get_db
-from database import AsyncSessionLocal
-from database import Database
-from sqlalchemy import text
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -106,7 +100,8 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(request: Request):
+async def get_current_user_optional(request: Request):
+    """Get current user if authenticated, otherwise return None"""
     try:
         token = request.session.get('token')
         if not token:
@@ -115,34 +110,26 @@ async def get_current_user(request: Request):
                 token = authorization[7:]
         
         if not token:
-            print("No authentication token found")
-            raise HTTPException(status_code=401, detail="Not authenticated")
+            return None
         
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username = str(payload.get("sub"))
             if username is None:
-                print("No username in token payload")
-                raise HTTPException(status_code=401, detail="Not authenticated")
-        except JWTError as jwt_error:
-            print(f"JWT decode error: {jwt_error}")
-            raise HTTPException(status_code=401, detail="Not authenticated")
+                return None
+        except JWTError:
+            return None
         
         try:
             user = await Database.get_user_by_username(username)
             if user is None:
-                print(f"User not found: {username}")
-                raise HTTPException(status_code=401, detail="Not authenticated")
-        except Exception as db_error:
-            print(f"Database error getting user {username}: {db_error}")
-            raise HTTPException(status_code=500, detail="Authentication service unavailable")
+                return None
+        except Exception:
+            return None
         
         return user
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Unexpected error in get_current_user: {e}")
-        raise HTTPException(status_code=500, detail="Authentication error")
+    except Exception:
+        return None
 
 @app.on_event("startup")
 async def startup_event():
@@ -152,8 +139,13 @@ async def startup_event():
     await Database.log_event("info", "api", "Application started")
 
 @app.get("/")
-async def root(request: Request, current_user: dict = Depends(get_current_user)):
-    """Root endpoint - redirect authenticated users to scanner"""
+async def root(request: Request, current_user: Optional[dict] = Depends(get_current_user_optional)):
+    """Root endpoint - redirect to login if not authenticated, scanner if authenticated"""
+    if not current_user:
+        # User not authenticated, redirect to login
+        return RedirectResponse(url="/login", status_code=302)
+    
+    # User is authenticated, show scanner
     return templates.TemplateResponse("scanner.html", {"request": request, "user": current_user})
 
 @app.get("/health")
