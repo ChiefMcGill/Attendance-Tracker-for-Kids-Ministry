@@ -817,6 +817,117 @@ async def get_session(session_id: str):
         print(f"Unexpected error in get_session: {e}")
         raise HTTPException(status_code=500, detail="Session retrieval failed")
 
+@app.get("/api/attendance/stats")
+async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
+    """Get attendance statistics - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            # Today's check-ins
+            today_result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE date(checkin_time) = date('now')
+            """))
+            today_count = today_result.scalar()
+            
+            # This week's check-ins (last 7 days)
+            week_result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE checkin_time >= datetime('now', '-7 days')
+            """))
+            week_count = week_result.scalar()
+            
+            # This month's check-ins
+            month_result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE strftime('%Y-%m', checkin_time) = strftime('%Y-%m', 'now')
+            """))
+            month_count = month_result.scalar()
+            
+            # Total registered children
+            children_result = await db.execute(text("""
+                SELECT COUNT(*) FROM children 
+                WHERE active = TRUE
+            """))
+            total_children = children_result.scalar()
+            
+            return {
+                "today": today_count or 0,
+                "week": week_count or 0,
+                "month": month_count or 0,
+                "total_children": total_children or 0
+            }
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error getting attendance stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/attendance/stats")
+async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
+    """Get attendance statistics - Admin only"""
+    if current_user['role'] != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            # Today's check-ins
+            today_result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE date(checkin_time) = date('now')
+            """))
+            today_count = today_result.scalar()
+            
+            # This week's check-ins (last 7 days)
+            week_result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE checkin_time >= datetime('now', '-7 days')
+            """))
+            week_count = week_result.scalar()
+            
+            # This month's check-ins
+            month_result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE strftime('%Y-%m', checkin_time) = strftime('%Y-%m', 'now')
+            """))
+            month_count = month_result.scalar()
+            
+            # Total registered children
+            children_result = await db.execute(text("""
+                SELECT COUNT(*) FROM children 
+                WHERE active = TRUE
+            """))
+            total_children = children_result.scalar()
+            
+            return {
+                "today": today_count or 0,
+                "week": week_count or 0,
+                "month": month_count or 0,
+                "total_children": total_children or 0
+            }
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error getting attendance stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/child/checkin-status/{child_id}")
+async def get_child_checkin_status(child_id: int, current_user: dict = Depends(get_current_user)):
+    """Check if child has already been checked in today"""
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT COUNT(*) FROM attendance 
+                WHERE child_id = :child_id AND date(checkin_time) = date('now')
+            """), {"child_id": child_id})
+            count = result.scalar()
+            
+            return {
+                "already_checked_in_today": count > 0,
+                "checkin_count_today": count
+            }
+    except Exception as e:
+        await Database.log_event("error", "api", f"Error checking child checkin status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.get("/api/attendance/download")
 async def download_attendance(current_user: dict = Depends(get_current_user)):
     """Download attendance records as CSV - Admin only"""
@@ -828,7 +939,52 @@ async def download_attendance(current_user: dict = Depends(get_current_user)):
         
         from sqlalchemy import text
         try:
-            print("Starting attendance download")
+            @app.get("/api/attendance/stats")
+            async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
+                """Get attendance statistics - Admin only"""
+                if current_user['role'] != 'admin':
+                    raise HTTPException(status_code=403, detail="Admin access required")
+                
+                try:
+                    async with AsyncSessionLocal() as db:
+                        # Today's check-ins
+                        today_result = await db.execute(text("""
+                            SELECT COUNT(*) FROM attendance 
+                            WHERE date(checkin_time) = date('now')
+                        """))
+                        today_count = today_result.scalar()
+                        
+                        # This week's check-ins (last 7 days)
+                        week_result = await db.execute(text("""
+                            SELECT COUNT(*) FROM attendance 
+                            WHERE checkin_time >= datetime('now', '-7 days')
+                        """))
+                        week_count = week_result.scalar()
+                        
+                        # This month's check-ins
+                        month_result = await db.execute(text("""
+                            SELECT COUNT(*) FROM attendance 
+                            WHERE strftime('%Y-%m', checkin_time) = strftime('%Y-%m', 'now')
+                        """))
+                        month_count = month_result.scalar()
+                        
+                        # Total registered children
+                        children_result = await db.execute(text("""
+                            SELECT COUNT(*) FROM children 
+                            WHERE active = TRUE
+                        """))
+                        total_children = children_result.scalar()
+                        
+                        return {
+                            "today": today_count or 0,
+                            "week": week_count or 0,
+                            "month": month_count or 0,
+                            "total_children": total_children or 0
+                        }
+                except Exception as e:
+                    await Database.log_event("error", "api", f"Error getting attendance stats: {str(e)}")
+                    raise HTTPException(status_code=500, detail="Internal server error")
+            
             # Get all attendance records with child and program info
             async with AsyncSessionLocal() as db:
                 result = await db.execute(text("""
@@ -1551,6 +1707,13 @@ async def scanner_page(request: Request, current_user: dict = Depends(get_curren
     if current_user['role'] not in ['admin', 'volunteer']:
         raise HTTPException(status_code=403, detail="Access denied")
     return templates.TemplateResponse("scanner.html", {"request": request, "user": current_user})
+
+@app.get("/profile")
+async def profile_page(request: Request, current_user: dict = Depends(get_current_user)):
+    """Profile page for volunteers and admins"""
+    if current_user['role'] not in ['admin', 'volunteer']:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return templates.TemplateResponse("profile.html", {"request": request, "user": current_user})
 
 if __name__ == "__main__":
     import uvicorn

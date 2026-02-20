@@ -59,23 +59,21 @@
             background: white;
             border-radius: 20px;
             padding: 2rem;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            max-width: 500px;
-            width: 100%;
             margin-bottom: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
 
         .search-input {
             width: 100%;
             padding: 0.75rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
             font-size: 1rem;
             margin-bottom: 1rem;
         }
 
         .search-results {
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
         }
 
@@ -107,6 +105,22 @@
             background: #059669;
         }
 
+        .already-checked-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: not-allowed;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+
+        .already-checked-btn:hover {
+            background: #6c757d;
+            transform: none;
+        }
+
         .modal {
             display: none;
             position: fixed;
@@ -117,22 +131,62 @@
             background: rgba(0, 0, 0, 0.5);
             justify-content: center;
             align-items: center;
+            z-index: 1000;
         }
 
         .modal-content {
             background: white;
-            border-radius: 20px;
             padding: 2rem;
-            max-width: 400px;
+            border-radius: 20px;
             width: 90%;
+            max-width: 500px;
+            text-align: center;
+            color: #333;
         }
 
-        .modal select {
+        .modal-content h3 {
+            margin-bottom: 1rem;
+            color: #333;
+        }
+
+        .modal-content p {
+            margin-bottom: 1rem;
+            color: #666;
+        }
+
+        .modal-content select {
             width: 100%;
             padding: 0.75rem;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
             margin-bottom: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #667eea;
+            color: white;
+            margin: 0.5rem;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
         }
 
         .logout-btn {
@@ -253,12 +307,12 @@
             position: fixed;
             bottom: 1rem;
             left: 1rem;
-            background: rgba(255, 255, 255, 0.9);
+            color: white;
             padding: 0.5rem 1rem;
             border-radius: 10px;
             font-size: 0.8rem;
-            color: #666;
             font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
         }
 
         .nav {
@@ -298,7 +352,6 @@
         {% if user.role == 'admin' %}
         <a href="/admin">Admin Dashboard</a>
         {% endif %}
-        <a href="/scanner">Scanner</a>
         <a href="/profile">Profile</a>
         <a href="#" onclick="logout()">Logout</a>
     </div>
@@ -457,20 +510,48 @@
                 return;
             }
 
-            resultsDiv.innerHTML = results.map(child => `
-                <div class="search-result">
-                    <div>
-                        <strong>${child.first_name} ${child.last_name}</strong><br>
-                        <small>${child.family_name}</small>
-                    </div>
-                    <button class="checkin-btn" onclick="openCheckinModal(${child.id}, '${child.first_name} ${child.last_name}')">&check; Check In</button>
-                </div>
-            `).join('');
+            // Check check-in status for all children
+            const checkPromises = results.map(child => 
+                fetch(`/api/child/checkin-status/${child.id}`, {
+                    headers: getAuthHeaders()
+                })
+                .then(response => response.json())
+                .then(status => ({...child, checkin_status: status}))
+                .catch(error => ({...child, checkin_status: {already_checked_in_today: false, checkin_count_today: 0}}))
+            );
+
+            Promise.all(checkPromises).then(childrenWithStatus => {
+                resultsDiv.innerHTML = childrenWithStatus.map(child => {
+                    const alreadyCheckedIn = child.checkin_status.already_checked_in_today;
+                    const checkinCount = child.checkin_status.checkin_count_today;
+                    
+                    return `
+                        <div class="search-result">
+                            <div>
+                                <strong>${child.first_name} ${child.last_name}</strong><br>
+                                <small>${child.family_name}</small>
+                            </div>
+                            <button class="${alreadyCheckedIn ? 'already-checked-btn' : 'checkin-btn'}" 
+                                    onclick="${alreadyCheckedIn ? 'showAlreadyCheckedMessage()' : `openCheckinModal(${child.id}, '${child.first_name} ${child.last_name}')`}">&check; ${alreadyCheckedIn ? `Checked In (${checkinCount})` : 'Check In'}</button>
+                        </div>
+                    `;
+                }).join('');
+            });
         }
 
         function openCheckinModal(childId, childName) {
+            // Reset modal to original state
+            document.getElementById('checkinModal').innerHTML = `
+                <div class="modal-content">
+                    <h3>Check In Child</h3>
+                    <p id="childName">${childName}</p>
+                    <select id="programSelect"></select>
+                    <button class="btn" onclick="submitCheckin()">Check In</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            `;
+
             currentChild = { id: childId, name: childName };
-            document.getElementById('childName').textContent = childName;
             
             // Populate programs
             const select = document.getElementById('programSelect');
@@ -517,39 +598,64 @@
 
             const programId = document.getElementById('programSelect').value;
             
-            fetch('/api/checkin-direct', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders()
-                },
-                body: JSON.stringify({
-                    child_id: currentChild.id,
-                    program_id: parseInt(programId),
-                    station_id: config.stationId,
-                    device_id: config.deviceId
-                })
+            // First check if child has already been checked in today
+            fetch(`/api/child/checkin-status/${currentChild.id}`, {
+                headers: getAuthHeaders()
             })
             .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const modalContent = document.querySelector('#checkinModal .modal-content');
-                    modalContent.innerHTML = `
-                        <h3>Check In Successful!</h3>
-                        <p>Child: ${data.label_payload.child_name}</p>
-                        <p>Age: ${data.label_payload.age}</p>
-                        <p>Family: ${data.label_payload.family_name}</p>
-                        <p>Parents: ${data.label_payload.parents.map(p => p.name + ' (' + p.phone + ')').join(', ')}</p>
-                        <img src="data:image/png;base64,${data.label_payload.qr_b64}" alt="QR Code" style="max-width: 150px;">
-                        <br><button class="btn" onclick="closeModal()">Done</button>
-                    `;
-                } else {
-                    showStatus(data.message, 'error');
+            .then(status => {
+                if (status.already_checked_in_today) {
+                    showStatus(`This child has already been checked in ${status.checkin_count_today} time(s) today`, 'error');
+                    setTimeout(() => {
+                        closeModal();
+                        // Refresh search results
+                        const searchInput = document.getElementById('searchInput');
+                        if (searchInput.value.trim()) {
+                            searchChildren(searchInput.value.trim());
+                        }
+                    }, 2000);
+                    return;
                 }
+
+                // Proceed with check-in if not already checked in today
+                fetch('/api/checkin-direct', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        child_id: currentChild.id,
+                        program_id: parseInt(programId),
+                        station_id: config.stationId,
+                        device_id: config.deviceId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalContent = document.querySelector('#checkinModal .modal-content');
+                        modalContent.innerHTML = `
+                            <h3>Check In Successful!</h3>
+                            <p>Child: ${data.label_payload.child_name}</p>
+                            <p>Age: ${data.label_payload.age}</p>
+                            <p>Family: ${data.label_payload.family_name}</p>
+                            <p>Parents: ${data.label_payload.parents.map(p => p.name + ' (' + p.phone + ')').join(', ')}</p>
+                            <img src="data:image/png;base64,${data.label_payload.qr_b64}" alt="QR Code" style="max-width: 150px;">
+                            <br><button class="btn" onclick="closeModal()">Done</button>
+                        `;
+                    } else {
+                        showStatus(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Check-in error:', error);
+                    showStatus('Check-in failed', 'error');
+                });
             })
             .catch(error => {
-                console.error('Check-in error:', error);
-                showStatus('Check-in failed', 'error');
+                console.error('Error checking check-in status:', error);
+                showStatus('Unable to verify check-in status', 'error');
             });
         }
 
@@ -586,6 +692,17 @@
             // Initialize scanner
             initializeScanner();
             
+            function showAlreadyCheckedMessage() {
+                showStatus('This child has already been checked in today', 'info');
+                // Refresh search results after a short delay to update the status
+                setTimeout(() => {
+                    const searchInput = document.getElementById('searchInput');
+                    if (searchInput.value.trim()) {
+                        searchChildren(searchInput.value.trim());
+                    }
+                }, 2000);
+            }
+
             // Search input listener
             const searchInput = document.getElementById('searchInput');
             searchInput.addEventListener('input', function() {

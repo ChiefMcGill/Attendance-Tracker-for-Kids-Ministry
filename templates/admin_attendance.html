@@ -187,6 +187,7 @@
 
     <div class="nav">
         <a href="/admin">Dashboard</a>
+        <a href="/scanner">Scanner</a>
         <a href="/admin/volunteers">Volunteers</a>
         <a href="/admin/programs">Programs</a>
         <a href="/admin/attendance">Attendance</a>
@@ -232,24 +233,50 @@
         }
 
         function loadStats() {
-            // For now, we'll show placeholder stats
-            // In a real implementation, you'd have API endpoints for statistics
-            const stats = [
-                { label: 'Total Check-ins Today', number: '0', note: 'Since midnight' },
-                { label: 'Total Check-ins This Week', number: '0', note: 'Last 7 days' },
-                { label: 'Total Check-ins This Month', number: '0', note: 'Current month' },
-                { label: 'Total Registered Children', number: '0', note: 'Active children' }
-            ];
+            fetch('/api/attendance/stats', {
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                const stats = [
+                    { label: 'Total Check-ins Today', number: data.today, note: 'Since midnight' },
+                    { label: 'Total Check-ins This Week', number: data.week, note: 'Last 7 days' },
+                    { label: 'Total Check-ins This Month', number: data.month, note: 'Current month' },
+                    { label: 'Total Registered Children', number: data.total_children, note: 'Active children' }
+                ];
 
-            const statsHtml = stats.map(stat => `
-                <div class="stat-card">
-                    <div class="stat-number">${stat.number}</div>
-                    <div class="stat-label">${stat.label}</div>
-                    ${stat.note ? `<div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${stat.note}</div>` : ''}
-                </div>
-            `).join('');
+                const statsGrid = document.getElementById('statsGrid');
+                const statsHtml = stats.map(stat => `
+                    <div class="stat-card">
+                        <div class="stat-number">${stat.number}</div>
+                        <div class="stat-label">${stat.label}</div>
+                        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${stat.note}</div>
+                    </div>
+                `).join('');
 
-            document.getElementById('statsGrid').innerHTML = statsHtml;
+                statsGrid.innerHTML = statsHtml;
+            })
+            .catch(error => {
+                console.error('Error loading stats:', error);
+                // Show placeholder stats if API fails
+                const stats = [
+                    { label: 'Total Check-ins Today', number: 'Error', note: 'Since midnight' },
+                    { label: 'Total Check-ins This Week', number: 'Error', note: 'Last 7 days' },
+                    { label: 'Total Check-ins This Month', number: 'Error', note: 'Current month' },
+                    { label: 'Total Registered Children', number: 'Error', note: 'Active children' }
+                ];
+
+                const statsGrid = document.getElementById('statsGrid');
+                const statsHtml = stats.map(stat => `
+                    <div class="stat-card">
+                        <div class="stat-number">${stat.number}</div>
+                        <div class="stat-label">${stat.label}</div>
+                        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${stat.note}</div>
+                    </div>
+                `).join('');
+
+                statsGrid.innerHTML = statsHtml;
+            });
         }
 
         function downloadCSV() {
