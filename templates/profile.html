@@ -222,23 +222,28 @@
 
             <div class="section">
                 <h2>Two-Factor Authentication</h2>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="enable2FA" onchange="toggle2FA()">
-                        Enable 2FA (TOTP)
-                    </label>
-                    <p class="password-requirements">
-                        Two-factor authentication adds an extra layer of security to your account.
-                        You'll need to use an authenticator app to generate codes when logging in.
-                    </p>
-                </div>
-                <div id="qrCodeSection" style="display: none;">
-                    <p>Scan this QR code with your authenticator app:</p>
-                    <div id="qrCodeContainer"></div>
+                <div id="twoFactorSection">
+                    <p>Two-factor authentication adds an extra layer of security to your account. You must have at least one authenticator app configured.</p>
+                    
+                    <h3>Current Authenticator Apps</h3>
+                    <div id="authAppsList">
+                        <!-- Authenticator apps will be loaded here -->
+                    </div>
+                    
                     <div class="form-group">
-                        <label for="setupCode">Enter the 6-digit code from your app:</label>
-                        <input type="text" id="setupCode" maxlength="6" pattern="[0-9]{6}">
-                        <button type="button" class="btn" onclick="complete2FASetup()">Complete Setup</button>
+                        <button type="button" class="btn" id="addNewAppBtn">Add New Authenticator App</button>
+                    </div>
+                    
+                    <div id="newAppSection" style="display: none;">
+                        <h3>Add New Authenticator App</h3>
+                        <p>Scan this QR code with your authenticator app:</p>
+                        <div id="newAppQrContainer"></div>
+                        <div class="form-group">
+                            <label for="newAppCode">Enter the 6-digit code from your app:</label>
+                            <input type="text" id="newAppCode" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
+                            <button type="button" class="btn" onclick="completeAddApp()">Add App</button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelAddApp()">Cancel</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -292,58 +297,45 @@
             }
         }
 
-        // Load 2FA status
+        // Load 2FA status and apps
         async function load2FAStatus() {
             try {
-                const response = await fetch('/api/profile/2fa-status', {
+                const response = await fetch('/api/profile/2fa-apps', {
                     headers: getAuthHeaders()
                 });
                 const data = await response.json();
-                document.getElementById('enable2FA').checked = data.enabled;
+                display2FAApps(data.apps);
             } catch (error) {
                 console.error('Failed to load 2FA status:', error);
+                showMessage('Failed to load 2FA settings', 'error');
             }
         }
 
-        // Toggle 2FA
-        async function toggle2FA() {
-            const enabled = document.getElementById('enable2FA').checked;
-            
-            if (!enabled) {
-                // Disabling 2FA - require confirmation since we need at least 1 method
-                if (!confirm('Are you sure you want to disable 2FA? This will make your account less secure.')) {
-                    document.getElementById('enable2FA').checked = true;
-                    return;
-                }
+        // Display 2FA apps
+        function display2FAApps(apps) {
+            const appsList = document.getElementById('authAppsList');
+            if (apps.length === 0) {
+                appsList.innerHTML = '<p>No authenticator apps configured. Add one below to enable 2FA.</p>';
+                return;
             }
             
-            try {
-                if (enabled) {
-                    // Show QR code for setup
-                    await start2FASetup();
-                } else {
-                    // Disable 2FA
-                    const response = await fetch('/api/profile/disable-2fa', {
-                        method: 'POST',
-                        headers: getAuthHeaders()
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                        showMessage('2FA disabled successfully', 'success');
-                        document.getElementById('qrCodeSection').style.display = 'none';
-                    } else {
-                        showMessage(data.detail || 'Failed to disable 2FA', 'error');
-                        document.getElementById('enable2FA').checked = true;
-                    }
-                }
-            } catch (error) {
-                showMessage('Failed to toggle 2FA', 'error');
-                document.getElementById('enable2FA').checked = !enabled;
-            }
+            appsList.innerHTML = apps.map((app, index) => `
+                <div class="auth-app-item" style="border: 1px solid #e5e7eb; padding: 1rem; margin-bottom: 1rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${app.name}</strong>
+                        <br><small>Added: ${new Date(app.created_at).toLocaleDateString()}</small>
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="removeApp('${app.id}')" ${apps.length <= 1 ? 'disabled title="Cannot remove the last authenticator app"' : ''}>
+                        Remove
+                    </button>
+                </div>
+            `).join('');
         }
 
-        // Start 2FA setup
-        async function start2FASetup() {
+        // Add new app
+        document.getElementById('addNewAppBtn').addEventListener('click', startAddApp);
+
+        async function startAddApp() {
             try {
                 const response = await fetch('/api/profile/setup-2fa', {
                     method: 'POST',
@@ -351,28 +343,26 @@
                 });
                 const data = await response.json();
                 
-                if (data.qr_code) {
-                    document.getElementById('qrCodeContainer').innerHTML = data.qr_code;
-                    document.getElementById('qrCodeSection').style.display = 'block';
+                if (data.qr_code && data.secret) {
+                    document.getElementById('newAppQrContainer').innerHTML = data.qr_code;
+                    window.currentTotpSecret = data.secret;
+                    document.getElementById('newAppSection').style.display = 'block';
+                    document.getElementById('addNewAppBtn').style.display = 'none';
                 } else {
                     showMessage('Failed to generate QR code', 'error');
-                    document.getElementById('enable2FA').checked = false;
                 }
             } catch (error) {
-                showMessage('Failed to start 2FA setup', 'error');
-                document.getElementById('enable2FA').checked = false;
+                showMessage('Failed to start adding new app', 'error');
             }
         }
 
-        // Complete 2FA setup
-        async function complete2FASetup() {
-            const code = document.getElementById('setupCode').value;
-            if (!code || code.length !== 6) {
+        async function completeAddApp() {
+            const code = document.getElementById('newAppCode').value.trim();
+            if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
                 showMessage('Please enter a valid 6-digit code', 'error');
                 return;
             }
             
-            // Get the secret from the setup response (stored temporarily)
             const secret = window.currentTotpSecret;
             if (!secret) {
                 showMessage('Setup session expired. Please try again.', 'error');
@@ -380,28 +370,58 @@
             }
             
             try {
-                const response = await fetch('/api/profile/complete-2fa-setup', {
+                const response = await fetch('/api/profile/complete-add-2fa-app', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         ...getAuthHeaders()
                     },
-                    body: JSON.stringify({ code: code, secret: secret })
+                    body: JSON.stringify({ code: code, secret: secret, name: 'Authenticator App' })
                 });
                 const data = await response.json();
                 
                 if (data.success) {
-                    showMessage('2FA enabled successfully', 'success');
-                    document.getElementById('qrCodeSection').style.display = 'none';
-                    document.getElementById('setupCode').value = '';
+                    showMessage('Authenticator app added successfully', 'success');
+                    document.getElementById('newAppSection').style.display = 'none';
+                    document.getElementById('newAppCode').value = '';
+                    document.getElementById('addNewAppBtn').style.display = 'inline-block';
                     window.currentTotpSecret = null;
-                    // Reload 2FA status
                     await load2FAStatus();
                 } else {
-                    showMessage(data.detail || 'Failed to complete 2FA setup', 'error');
+                    showMessage(data.detail || 'Failed to add authenticator app', 'error');
                 }
             } catch (error) {
-                showMessage('Failed to complete 2FA setup', 'error');
+                showMessage('Failed to add authenticator app', 'error');
+            }
+        }
+
+        function cancelAddApp() {
+            document.getElementById('newAppSection').style.display = 'none';
+            document.getElementById('newAppCode').value = '';
+            document.getElementById('addNewAppBtn').style.display = 'inline-block';
+            window.currentTotpSecret = null;
+        }
+
+        async function removeApp(appId) {
+            if (!confirm('Are you sure you want to remove this authenticator app? You will no longer be able to use it for 2FA.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/profile/remove-2fa-app/${appId}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Authenticator app removed successfully', 'success');
+                    await load2FAStatus();
+                } else {
+                    showMessage(data.detail || 'Failed to remove authenticator app', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to remove authenticator app', 'error');
             }
         }
 

@@ -235,7 +235,7 @@
     <div class="container">
         <div class="card">
             <h2>Account Recovery</h2>
-            <p>Select a volunteer to reset their password or disable their 2FA:</p>
+            <p>Select a volunteer to reset their password or manage their 2FA authenticator apps.</p>
             <div id="volunteersTable"></div>
         </div>
     </div>
@@ -249,13 +249,37 @@
                 <label for="recoveryType">Recovery Action</label>
                 <select id="recoveryType" name="recoveryType">
                     <option value="password">Reset Password</option>
-                    <option value="2fa">Disable 2FA</option>
+                    <option value="2fa">Manage 2FA Apps</option>
                 </select>
             </div>
-            <div id="newPasswordDiv" style="display: none;">
+            <div id="passwordDiv" style="display: block;">
                 <p><strong>New Temporary Password:</strong></p>
                 <div id="newPassword" style="padding: 0.75rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; font-family: monospace; margin: 1rem 0;"></div>
                 <p class="message warning">Please provide this password to the volunteer. They will be required to change it on first login.</p>
+            </div>
+            <div id="twoFADiv" style="display: none;">
+                <h4>Current 2FA Apps</h4>
+                <div id="current2FAApps" style="margin: 1rem 0;">
+                    <!-- 2FA apps will be loaded here -->
+                </div>
+                <div class="form-group">
+                    <button type="button" class="btn btn-secondary" onclick="addNew2FAApp()">Add New 2FA App</button>
+                </div>
+                <div id="new2FAAppDiv" style="display: none; margin-top: 1rem;">
+                    <h5>Add New 2FA App</h5>
+                    <div class="form-group">
+                        <label for="newAppName">App Name:</label>
+                        <input type="text" id="newAppName" placeholder="e.g., Google Authenticator" style="width: 100%; padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 4px;">
+                    </div>
+                    <p>Scan this QR code with the new authenticator app:</p>
+                    <div id="newAppQrCode" style="text-align: center; margin: 1rem 0;"></div>
+                    <div class="form-group">
+                        <label for="verificationCode">Enter verification code:</label>
+                        <input type="text" id="verificationCode" maxlength="6" placeholder="000000" style="width: 100%; padding: 0.5rem; border: 1px solid #e5e7eb; border-radius: 4px;">
+                    </div>
+                    <button type="button" class="btn" onclick="completeAdd2FAApp()">Add App</button>
+                    <button type="button" class="btn btn-secondary" onclick="cancelAdd2FAApp()">Cancel</button>
+                </div>
             </div>
             <button type="button" class="btn" id="performRecoveryBtn" onclick="performRecovery()">Perform Recovery</button>
             <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -347,14 +371,23 @@
             currentVolunteerId = volunteerId;
             document.getElementById('recoveryUser').textContent = `User: ${volunteer.username} (${volunteer.first_name} ${volunteer.last_name})`;
             document.getElementById('recoveryType').value = 'password';
-            document.getElementById('newPasswordDiv').style.display = 'none';
+            
+            // Show password div by default, hide 2FA div
+            document.getElementById('passwordDiv').style.display = 'none';
+            document.getElementById('twoFADiv').style.display = 'none';
             document.getElementById('recoveryMessage').style.display = 'none';
+            
             document.getElementById('recoveryModal').style.display = 'flex';
 
-            // Show/hide password preview based on selection
+            // Handle recovery type changes
             document.getElementById('recoveryType').addEventListener('change', function() {
                 const type = this.value;
-                document.getElementById('newPasswordDiv').style.display = type === 'password' ? 'none' : 'none';
+                document.getElementById('passwordDiv').style.display = type === 'password' ? 'block' : 'none';
+                document.getElementById('twoFADiv').style.display = type === '2fa' ? 'block' : 'none';
+                
+                if (type === '2fa') {
+                    loadUser2FAApps();
+                }
             });
         }
 
@@ -374,10 +407,6 @@
                 url = `/api/admin/recovery/reset-password/${currentVolunteerId}`;
                 method = 'POST';
                 body = null;
-            } else if (recoveryType === '2fa') {
-                url = `/api/admin/recovery/disable-2fa/${currentVolunteerId}`;
-                method = 'POST';
-                body = null;
             }
 
             fetch(url, {
@@ -393,7 +422,7 @@
                 if (data.success) {
                     if (data.new_password) {
                         document.getElementById('newPassword').textContent = data.new_password;
-                        document.getElementById('newPasswordDiv').style.display = 'block';
+                        document.getElementById('passwordDiv').style.display = 'block';
                         showMessage('recoveryMessage', 'Password reset successful. Provide the new password to the volunteer.', 'success');
                         btn.textContent = 'Done';
                         btn.onclick = () => closeModal();
@@ -415,6 +444,136 @@
                 showMessage('recoveryMessage', 'Recovery action failed', 'error');
                 btn.disabled = false;
                 btn.textContent = 'Perform Recovery';
+            });
+        }
+
+        // 2FA Management Functions
+        function loadUser2FAApps() {
+            fetch(`/api/admin/recovery/user-2fa-apps/${currentVolunteerId}`, {
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayUser2FAApps(data.apps);
+            })
+            .catch(error => {
+                console.error('Error loading 2FA apps:', error);
+                showMessage('recoveryMessage', 'Error loading 2FA apps', 'error');
+            });
+        }
+
+        function displayUser2FAApps(apps) {
+            const container = document.getElementById('current2FAApps');
+            if (!apps || apps.length === 0) {
+                container.innerHTML = '<p>No 2FA apps configured for this user.</p>';
+                return;
+            }
+
+            container.innerHTML = apps.map(app => `
+                <div style="border: 1px solid #e5e7eb; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${app.name}</strong><br>
+                        <small>Added: ${new Date(app.created_at).toLocaleDateString()}</small>
+                    </div>
+                    <button type="button" class="btn-danger" onclick="removeUser2FAApp(${app.id})" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" ${apps.length <= 1 ? 'disabled title="Cannot remove the last 2FA app"' : ''}>Remove</button>
+                </div>
+            `).join('');
+        }
+
+        function addNew2FAApp() {
+            document.getElementById('newAppName').value = '';
+            document.getElementById('verificationCode').value = '';
+            document.getElementById('newAppQrCode').innerHTML = '';
+            document.getElementById('new2FAAppDiv').style.display = 'block';
+            
+            // Generate QR code for new app
+            fetch(`/api/admin/recovery/setup-2fa/${currentVolunteerId}`, {
+                method: 'POST',
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.qr_code) {
+                    document.getElementById('newAppQrCode').innerHTML = data.qr_code;
+                    window.currentNewAppSecret = data.secret;
+                } else {
+                    showMessage('recoveryMessage', 'Failed to generate QR code', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error generating QR code:', error);
+                showMessage('recoveryMessage', 'Failed to generate QR code', 'error');
+            });
+        }
+
+        function completeAdd2FAApp() {
+            const appName = document.getElementById('newAppName').value.trim();
+            const code = document.getElementById('verificationCode').value.trim();
+
+            if (!appName) {
+                showMessage('recoveryMessage', 'Please enter an app name', 'error');
+                return;
+            }
+
+            if (!code || code.length !== 6) {
+                showMessage('recoveryMessage', 'Please enter a valid 6-digit code', 'error');
+                return;
+            }
+
+            fetch(`/api/admin/recovery/complete-add-2fa-app/${currentVolunteerId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
+                body: JSON.stringify({
+                    name: appName,
+                    code: code,
+                    secret: window.currentNewAppSecret
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('recoveryMessage', '2FA app added successfully', 'success');
+                    document.getElementById('new2FAAppDiv').style.display = 'none';
+                    loadUser2FAApps();
+                } else {
+                    showMessage('recoveryMessage', data.message || 'Failed to add 2FA app', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error adding 2FA app:', error);
+                showMessage('recoveryMessage', 'Failed to add 2FA app', 'error');
+            });
+        }
+
+        function cancelAdd2FAApp() {
+            document.getElementById('new2FAAppDiv').style.display = 'none';
+            window.currentNewAppSecret = null;
+        }
+
+        function removeUser2FAApp(appId) {
+            if (!confirm('Are you sure you want to remove this 2FA app? The user will no longer be able to use it for authentication.')) {
+                return;
+            }
+
+            fetch(`/api/admin/recovery/remove-2fa-app/${currentVolunteerId}/${appId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage('recoveryMessage', '2FA app removed successfully', 'success');
+                    loadUser2FAApps();
+                } else {
+                    showMessage('recoveryMessage', data.message || 'Failed to remove 2FA app', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error removing 2FA app:', error);
+                showMessage('recoveryMessage', 'Failed to remove 2FA app', 'error');
             });
         }
 

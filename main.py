@@ -192,7 +192,8 @@ async def login(request: Request, login_data: LoginRequest):
             raise HTTPException(status_code=500, detail="Authentication error")
         
         # Check 2FA
-        if user.get('enabled_2fa'):
+        user_2fa_apps = await Database.get_user_2fa_apps(user['id'])
+        if user_2fa_apps:  # If user has any 2FA apps configured
             if not login_data.otp:
                 print(f"2FA required but not provided for user: {login_data.username}")
                 await Database.log_event("info", "auth", f"2FA code required for login", 
@@ -200,8 +201,8 @@ async def login(request: Request, login_data: LoginRequest):
                 return {"success": False, "message": "2FA code required", "requires_2fa": True}
             
             try:
-                totp = pyotp.TOTP(user['totp_secret'])
-                if not totp.verify(login_data.otp):
+                code_valid = await Database.validate_user_2fa_code(user['id'], login_data.otp)
+                if not code_valid:
                     print(f"Invalid 2FA code for user: {login_data.username}")
                     await Database.log_event("warning", "auth", f"Invalid 2FA code provided", 
                                            details=f"Username: {login_data.username}")
@@ -211,17 +212,8 @@ async def login(request: Request, login_data: LoginRequest):
                 await Database.log_event("error", "auth", f"2FA verification error for {login_data.username}: {str(fa_error)}")
                 raise HTTPException(status_code=500, detail="2FA verification failed")
         else:
-            # Not enabled, setup required
-            try:
-                totp_secret = pyotp.random_base32()
-                await Database.update_volunteer_2fa(user['id'], totp_secret, False)
-                print(f"2FA setup initiated for user: {login_data.username}")
-                await Database.log_event("info", "auth", f"2FA setup initiated for {login_data.username}")
-                return {"success": False, "setup_2fa": True, "totp_secret": totp_secret, "message": "2FA setup required"}
-            except Exception as setup_error:
-                print(f"2FA setup error for {login_data.username}: {setup_error}")
-                await Database.log_event("error", "auth", f"2FA setup error for {login_data.username}: {str(setup_error)}")
-                raise HTTPException(status_code=500, detail="Failed to initiate 2FA setup")
+            # No 2FA apps configured - this is allowed for backwards compatibility
+            print(f"No 2FA configured for user: {login_data.username}")
         
         # Create token
         try:
@@ -1240,26 +1232,6 @@ async def update_volunteer(volunteer_id: int, request: UpdateVolunteerRequest, c
             if request.active is not None:
                 updates['active'] = request.active
             
-            # Handle 2FA changes
-            if request.enabled_2fa is not None:
-                try:
-                    if request.enabled_2fa:
-                        # Generate new TOTP secret if enabling
-                        totp_secret = pyotp.random_base32()
-                        await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
-                        await Database.log_event("info", "api", f"2FA enabled for volunteer {volunteer_id}", 
-                                               details=f"Updated by: {current_user['username']}")
-                    else:
-                        # Disable 2FA
-                        await Database.update_volunteer_2fa(volunteer_id, None, False)
-                        await Database.log_event("info", "api", f"2FA disabled for volunteer {volunteer_id}", 
-                                               details=f"Updated by: {current_user['username']}")
-                except Exception as fa_error:
-                    print(f"Error updating 2FA for volunteer {volunteer_id}: {fa_error}")
-                    await Database.log_event("error", "api", f"Failed to update 2FA for volunteer {volunteer_id}: {str(fa_error)}", 
-                                           details=f"User: {current_user['username']}")
-                    raise HTTPException(status_code=500, detail="Failed to update 2FA settings")
-            
             # Update other fields
             if updates:
                 try:
@@ -1433,6 +1405,140 @@ async def admin_reset_password(volunteer_id: int, current_user: dict = Depends(g
         await Database.log_event("error", "api", f"Failed to reset password for volunteer {volunteer_id}: {str(e)}", 
                                details=f"Admin: {current_user['username']}")
         raise HTTPException(status_code=500, detail="Failed to reset password")
+
+@app.get("/api/admin/recovery/user-2fa-apps/{user_id}")
+async def admin_get_user_2fa_apps(user_id: int, current_user: dict = Depends(get_current_user)):
+    """Admin get user's 2FA apps - Admin only"""
+    try:
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized 2FA apps access attempt", 
+                                   details=f"Target: {user_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        apps = await Database.get_user_2fa_apps(user_id)
+        return {"apps": apps}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in admin_get_user_2fa_apps: {e}")
+        await Database.log_event("error", "api", f"Failed to get 2FA apps for user {user_id}: {str(e)}", 
+                               details=f"Admin: {current_user['username']}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve 2FA apps")
+
+@app.post("/api/admin/recovery/setup-2fa/{user_id}")
+async def admin_setup_2fa(user_id: int, current_user: dict = Depends(get_current_user)):
+    """Admin generate QR code for new 2FA app setup - Admin only"""
+    try:
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized 2FA setup attempt", 
+                                   details=f"Target: {user_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        import pyotp
+        import qrcode
+        from io import BytesIO
+        import base64
+
+        # Generate TOTP secret
+        secret = pyotp.random_base32()
+        
+        # Get username for QR code
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("SELECT username FROM volunteers WHERE id = :id"), {"id": user_id})
+            row = result.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="User not found")
+            username = row[0]
+        
+        # Create TOTP URI
+        totp = pyotp.TOTP(secret)
+        uri = totp.provisioning_uri(name=username, issuer_name="Kids Ministry Check-in")
+        
+        # Generate QR code
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(uri)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        
+        # Convert to base64
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        qr_html = f'<img src="data:image/png;base64,{qr_b64}" alt="QR Code" style="max-width: 200px;">'
+        
+        return {"qr_code": qr_html, "secret": secret}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in admin_setup_2fa: {e}")
+        await Database.log_event("error", "api", f"Failed to setup 2FA for user {user_id}: {str(e)}", 
+                               details=f"Admin: {current_user['username']}")
+        raise HTTPException(status_code=500, detail="Failed to generate QR code")
+
+@app.post("/api/admin/recovery/complete-add-2fa-app/{user_id}")
+async def admin_complete_add_2fa_app(user_id: int, request: dict, current_user: dict = Depends(get_current_user)):
+    """Admin complete adding a new 2FA app - Admin only"""
+    try:
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized 2FA app addition attempt", 
+                                   details=f"Target: {user_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        code = request.get('code')
+        secret = request.get('secret')
+        name = request.get('name', 'Authenticator App')
+        
+        if not code or not secret:
+            raise HTTPException(status_code=400, detail="Code and secret are required")
+        
+        # Validate the code
+        import pyotp
+        totp = pyotp.TOTP(secret)
+        if not totp.verify(code):
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        # Add the app
+        app_id = await Database.add_user_2fa_app(user_id, name, secret)
+        
+        await Database.log_event("info", "api", f"Added 2FA app '{name}' for user {user_id} by admin", 
+                               details=f"Admin: {current_user['username']}")
+        return {"success": True, "app_id": app_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in admin_complete_add_2fa_app: {e}")
+        await Database.log_event("error", "api", f"Failed to add 2FA app for user {user_id}: {str(e)}", 
+                               details=f"Admin: {current_user['username']}")
+        raise HTTPException(status_code=500, detail="Failed to add 2FA app")
+
+@app.delete("/api/admin/recovery/remove-2fa-app/{user_id}/{app_id}")
+async def admin_remove_2fa_app(user_id: int, app_id: int, current_user: dict = Depends(get_current_user)):
+    """Admin remove a 2FA app - Admin only"""
+    try:
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized 2FA app removal attempt", 
+                                   details=f"Target: {user_id}, App: {app_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        success = await Database.remove_user_2fa_app(user_id, app_id)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="Cannot remove the last 2FA app. Users must have at least one active authenticator app.")
+        
+        await Database.log_event("info", "api", f"Removed 2FA app {app_id} for user {user_id} by admin", 
+                               details=f"Admin: {current_user['username']}")
+        return {"success": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in admin_remove_2fa_app: {e}")
+        await Database.log_event("error", "api", f"Failed to remove 2FA app {app_id} for user {user_id}: {str(e)}", 
+                               details=f"Admin: {current_user['username']}")
+        raise HTTPException(status_code=500, detail="Failed to remove 2FA app")
 
 @app.get("/api/programs/all")
 async def get_all_programs(current_user: dict = Depends(get_current_user)):
@@ -1714,6 +1820,94 @@ async def profile_page(request: Request, current_user: dict = Depends(get_curren
     if current_user['role'] not in ['admin', 'volunteer']:
         raise HTTPException(status_code=403, detail="Access denied")
     return templates.TemplateResponse("profile.html", {"request": request, "user": current_user})
+
+@app.get("/api/profile/2fa-apps")
+async def get_user_2fa_apps_api(current_user: dict = Depends(get_current_user)):
+    """Get user's 2FA apps"""
+    try:
+        apps = await Database.get_user_2fa_apps(current_user['id'])
+        return {"apps": apps}
+    except Exception as e:
+        await Database.log_event("error", "api", f"Failed to get 2FA apps: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve 2FA apps")
+
+@app.post("/api/profile/setup-2fa")
+async def setup_2fa_api(current_user: dict = Depends(get_current_user)):
+    """Generate QR code for 2FA setup"""
+    try:
+        import pyotp
+        import qrcode
+        from io import BytesIO
+        import base64
+
+        # Generate TOTP secret
+        secret = pyotp.random_base32()
+        
+        # Create TOTP URI
+        totp = pyotp.TOTP(secret)
+        uri = totp.provisioning_uri(name=current_user['username'], issuer_name="Kids Ministry Check-in")
+        
+        # Generate QR code
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(uri)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        
+        # Convert to base64
+        buf = BytesIO()
+        img.save(buf, format='PNG')
+        qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        qr_html = f'<img src="data:image/png;base64,{qr_b64}" alt="QR Code" style="max-width: 200px;">'
+        
+        return {"qr_code": qr_html, "secret": secret}
+    except Exception as e:
+        await Database.log_event("error", "api", f"Failed to setup 2FA: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate QR code")
+
+@app.post("/api/profile/complete-add-2fa-app")
+async def complete_add_2fa_app_api(request: dict, current_user: dict = Depends(get_current_user)):
+    """Complete adding a new 2FA app"""
+    try:
+        code = request.get('code')
+        secret = request.get('secret')
+        name = request.get('name', 'Authenticator App')
+        
+        if not code or not secret:
+            raise HTTPException(status_code=400, detail="Code and secret are required")
+        
+        # Validate the code
+        import pyotp
+        totp = pyotp.TOTP(secret)
+        if not totp.verify(code):
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        # Add the app
+        app_id = await Database.add_user_2fa_app(current_user['id'], name, secret)
+        
+        await Database.log_event("info", "api", f"Added 2FA app '{name}' for user {current_user['username']}")
+        return {"success": True, "app_id": app_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await Database.log_event("error", "api", f"Failed to add 2FA app: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to add 2FA app")
+
+@app.delete("/api/profile/remove-2fa-app/{app_id}")
+async def remove_2fa_app_api(app_id: int, current_user: dict = Depends(get_current_user)):
+    """Remove a 2FA app"""
+    try:
+        success = await Database.remove_user_2fa_app(current_user['id'], app_id)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="Cannot remove the last 2FA app. You must have at least one active authenticator app.")
+        
+        await Database.log_event("info", "api", f"Removed 2FA app {app_id} for user {current_user['username']}")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await Database.log_event("error", "api", f"Failed to remove 2FA app: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to remove 2FA app")
 
 if __name__ == "__main__":
     import uvicorn

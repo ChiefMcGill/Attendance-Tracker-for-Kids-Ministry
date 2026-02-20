@@ -37,6 +37,25 @@
             opacity: 0.9;
         }
 
+        .nav {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem;
+            text-align: center;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         .main-container {
             flex: 1;
             display: flex;
@@ -46,6 +65,16 @@
             padding: 2rem;
         }
 
+        .search-container {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+
         .scanner-container {
             background: white;
             border-radius: 20px;
@@ -53,14 +82,6 @@
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             max-width: 500px;
             width: 100%;
-        }
-
-        .search-container {
-            background: white;
-            border-radius: 20px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
 
         .search-input {
@@ -348,7 +369,9 @@
     <div class="header">
         <h1>Kids Ministry Check-in</h1>
         <p>Scan QR code to check in children</p>
-        <div class="nav">
+    </div>
+
+    <div class="nav">
         {% if user.role == 'admin' %}
         <a href="/admin">Admin Dashboard</a>
         {% endif %}
@@ -415,7 +438,8 @@
         function checkAuth() {
             const token = localStorage.getItem('authToken');
             if (!token) {
-                window.location.href = '/login';
+                window.location.href = '/login?error=not_authenticated';
+                return;
             }
         }
 

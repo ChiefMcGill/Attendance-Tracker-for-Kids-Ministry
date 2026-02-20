@@ -79,7 +79,18 @@ async def init_database():
             "ALTER TABLE volunteers ADD COLUMN totp_secret TEXT",
             "ALTER TABLE volunteers ADD COLUMN enabled_2fa BOOLEAN DEFAULT FALSE",
             "ALTER TABLE volunteers ADD COLUMN active BOOLEAN DEFAULT TRUE",
-            "ALTER TABLE volunteers ADD COLUMN email TEXT"
+            "ALTER TABLE volunteers ADD COLUMN email TEXT",
+            """
+            CREATE TABLE IF NOT EXISTS user_2fa_apps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                totp_secret TEXT NOT NULL,
+                active BOOLEAN DEFAULT TRUE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES volunteers (id)
+            )
+            """
         ]
         for alter in alters:
             try:
@@ -654,4 +665,104 @@ class Database:
         except Exception as e:
             print(f"Error in search_children: {e}")
             await Database.log_database_error("search_children", str(e), f"Query: {query}")
+            raise
+
+    @staticmethod
+    async def get_user_2fa_apps(user_id: int) -> List[Dict[str, Any]]:
+        """Get all 2FA apps for a user"""
+        try:
+            print(f"Getting 2FA apps for user {user_id}")
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("""
+                    SELECT id, user_id, name, totp_secret, created_at
+                    FROM user_2fa_apps
+                    WHERE user_id = :user_id AND active = TRUE
+                    ORDER BY created_at
+                """), {"user_id": user_id})
+                rows = result.fetchall()
+                columns = result.keys()
+                apps = [dict(zip(columns, row)) for row in rows]
+                print(f"Found {len(apps)} 2FA apps for user {user_id}")
+                return apps
+        except Exception as e:
+            print(f"Error in get_user_2fa_apps: {e}")
+            await Database.log_database_error("get_user_2fa_apps", str(e), f"User ID: {user_id}")
+            raise
+
+    @staticmethod
+    async def add_user_2fa_app(user_id: int, name: str, totp_secret: str) -> int:
+        """Add a new 2FA app for a user"""
+        try:
+            print(f"Adding 2FA app '{name}' for user {user_id}")
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        INSERT INTO user_2fa_apps (user_id, name, totp_secret, active, created_at)
+                        VALUES (:user_id, :name, :totp_secret, TRUE, datetime('now'))
+                    """),
+                    {"user_id": user_id, "name": name, "totp_secret": totp_secret}
+                )
+                await db.commit()
+                result = await db.execute(text("SELECT last_insert_rowid()"))
+                app_id = result.scalar()
+                print(f"Added 2FA app '{name}' with ID {app_id} for user {user_id}")
+                return app_id
+        except Exception as e:
+            print(f"Error in add_user_2fa_app: {e}")
+            await Database.log_database_error("add_user_2fa_app", str(e), f"User ID: {user_id}, Name: {name}")
+            raise
+
+    @staticmethod
+    async def remove_user_2fa_app(user_id: int, app_id: int) -> bool:
+        """Remove a 2FA app for a user (but ensure at least 1 remains)"""
+        try:
+            print(f"Removing 2FA app {app_id} for user {user_id}")
+            async with AsyncSessionLocal() as db:
+                # Check how many active apps the user has
+                result = await db.execute(text("""
+                    SELECT COUNT(*) FROM user_2fa_apps
+                    WHERE user_id = :user_id AND active = TRUE
+                """), {"user_id": user_id})
+                count = result.scalar()
+                
+                if count <= 1:
+                    print(f"Cannot remove 2FA app {app_id} for user {user_id} - must have at least 1 app")
+                    return False
+                
+                # Remove the app
+                await db.execute(
+                    text("UPDATE user_2fa_apps SET active = FALSE WHERE id = :app_id AND user_id = :user_id"),
+                    {"app_id": app_id, "user_id": user_id}
+                )
+                await db.commit()
+                print(f"Removed 2FA app {app_id} for user {user_id}")
+                return True
+        except Exception as e:
+            print(f"Error in remove_user_2fa_app: {e}")
+            await Database.log_database_error("remove_user_2fa_app", str(e), f"User ID: {user_id}, App ID: {app_id}")
+            raise
+
+    @staticmethod
+    async def validate_user_2fa_code(user_id: int, code: str) -> bool:
+        """Validate a 2FA code against any of the user's active apps"""
+        try:
+            print(f"Validating 2FA code for user {user_id}")
+            apps = await Database.get_user_2fa_apps(user_id)
+            
+            import pyotp
+            for app in apps:
+                try:
+                    totp = pyotp.TOTP(app['totp_secret'])
+                    if totp.verify(code):
+                        print(f"2FA code validated against app '{app['name']}' for user {user_id}")
+                        return True
+                except Exception as e:
+                    print(f"Error validating against app '{app['name']}': {e}")
+                    continue
+            
+            print(f"2FA code validation failed for user {user_id}")
+            return False
+        except Exception as e:
+            print(f"Error in validate_user_2fa_code: {e}")
+            await Database.log_database_error("validate_user_2fa_code", str(e), f"User ID: {user_id}")
             raise
