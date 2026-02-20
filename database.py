@@ -439,12 +439,16 @@ class Database:
     @staticmethod
     async def delete_volunteer(user_id: int):
         """Delete volunteer"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("UPDATE volunteers SET active = FALSE WHERE id = :user_id"),
-                {"user_id": user_id}
-            )
-            await db.commit()
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("UPDATE volunteers SET active = FALSE WHERE id = :user_id"),
+                    {"user_id": user_id}
+                )
+                await db.commit()
+        except Exception as e:
+            print(f"Error in delete_volunteer: {e}")
+            raise
     
     @staticmethod
     async def get_child_qr(child_id: int) -> Optional[str]:

@@ -53,7 +53,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(SessionMiddleware, secret_key="your-secret-key-here")
+# Session middleware with proper HTTPS settings
+app.add_middleware(SessionMiddleware, 
+    secret_key=SECRET_KEY,
+    session_cookie="session",
+    max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
+    same_site="lax",  # Changed from "none" for HTTPS compatibility
+    https_only=True,
+    path="/"
+)
 
 # Static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -161,31 +169,6 @@ async def login(request: Request, login_data: LoginRequest):
     )
     request.session['token'] = access_token
     return {"success": True, "message": "Login successful", "token": access_token, "role": user['role']}
-
-@app.post("/api/setup_2fa")
-async def setup_2fa_endpoint(request: Setup2FARequest):
-    user = await Database.get_user_by_username(request.username)
-    if not user:
-        return {"success": False, "message": "User not found"}
-    if user.get('enabled_2fa'):
-        return {"success": False, "message": "2FA already enabled"}
-    if not user.get('totp_secret'):
-        return {"success": False, "message": "2FA not initialized"}
-    
-    totp = pyotp.TOTP(user['totp_secret'])
-    if not totp.verify(request.otp):
-        return {"success": False, "message": "Invalid 2FA code"}
-    
-    # Enable 2FA
-    await Database.update_volunteer_2fa(user['id'], user['totp_secret'], True)
-    
-    # Create token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user['username']}, expires_delta=access_token_expires
-    )
-    
-    return {"success": True, "message": "2FA enabled", "token": access_token, "role": user['role']}
 
 @app.get("/api/search-children")
 async def search_children(query: str, current_user: dict = Depends(get_current_user)):
