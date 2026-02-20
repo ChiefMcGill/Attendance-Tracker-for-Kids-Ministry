@@ -373,45 +373,54 @@ class Database:
     @staticmethod
     async def get_session_info(session_id: str) -> Optional[Dict[str, Any]]:
         """Get session info for confirmation page"""
-        async with AsyncSessionLocal() as db:
-            # Get session
-            session_result = await db.execute(text("""
-                SELECT cs.*, c.first_name, c.last_name, c.birth_date, f.family_name,
-                       c.allergies, c.medications, c.special_notes, c.medical_notes
-                FROM checkin_sessions cs
-                JOIN children c ON cs.child_id = c.id
-                JOIN families f ON c.family_id = f.id
-                WHERE cs.session_id = :session_id AND cs.expires_at > datetime('now') AND cs.confirmed = FALSE
-            """), {"session_id": session_id})
-            
-            session_row = session_result.fetchone()
-            if not session_row:
-                return None
-            
-            session_columns = session_result.keys()
-            session_data = dict(zip(session_columns, session_row))
-            
-            # Get all programs
-            programs = await Database.get_programs()
-            
-            # Build child info
-            child_info = {
-                "id": session_data["child_id"],
-                "first_name": session_data["first_name"],
-                "last_name": session_data["last_name"],
-                "birth_date": session_data["birth_date"],
-                "family_name": session_data["family_name"],
-                "allergies": session_data["allergies"],
-                "medications": session_data["medications"],
-                "special_notes": session_data["special_notes"],
-                "medical_notes": session_data["medical_notes"]
-            }
-            
-            return {
-                "session_id": session_id,
-                "child_info": child_info,
-                "programs": programs
-            }
+        try:
+            print(f"Getting session info for session_id: {session_id}")
+            async with AsyncSessionLocal() as db:
+                # Get session
+                session_result = await db.execute(text("""
+                    SELECT cs.*, c.first_name, c.last_name, c.birth_date, f.family_name,
+                           c.allergies, c.medications, c.special_notes, c.medical_notes
+                    FROM checkin_sessions cs
+                    JOIN children c ON cs.child_id = c.id
+                    JOIN families f ON c.family_id = f.id
+                    WHERE cs.session_id = :session_id AND cs.expires_at > datetime('now') AND cs.confirmed = FALSE
+                """), {"session_id": session_id})
+                
+                session_row = session_result.fetchone()
+                if not session_row:
+                    print(f"No session found for session_id: {session_id}")
+                    return None
+                
+                session_columns = session_result.keys()
+                session_data = dict(zip(session_columns, session_row))
+                
+                # Get all programs
+                programs = await Database.get_programs()
+                
+                # Build child info
+                child_info = {
+                    "id": session_data["child_id"],
+                    "first_name": session_data["first_name"],
+                    "last_name": session_data["last_name"],
+                    "birth_date": session_data["birth_date"],
+                    "family_name": session_data["family_name"],
+                    "allergies": session_data["allergies"],
+                    "medications": session_data["medications"],
+                    "special_notes": session_data["special_notes"],
+                    "medical_notes": session_data["medical_notes"]
+                }
+                
+                result = {
+                    "session_id": session_id,
+                    "child_info": child_info,
+                    "programs": programs
+                }
+                print(f"Successfully retrieved session info for child: {child_info['first_name']} {child_info['last_name']}")
+                return result
+        except Exception as e:
+            print(f"Error in get_session_info: {e}")
+            await Database.log_database_error("get_session_info", str(e), f"Session ID: {session_id}")
+            raise
     
     @staticmethod
     async def get_user_by_username(username: str):
@@ -462,142 +471,187 @@ class Database:
     @staticmethod
     async def update_volunteer_2fa(user_id: int, totp_secret: str, enabled: bool):
         """Update 2FA for volunteer"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("""
-                    UPDATE volunteers
-                    SET totp_secret = :totp_secret, enabled_2fa = :enabled
-                    WHERE id = :user_id
-                """),
-                {"user_id": user_id, "totp_secret": totp_secret, "enabled": enabled}
-            )
-            await db.commit()
+        try:
+            print(f"Updating 2FA for user {user_id}: enabled={enabled}")
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        UPDATE volunteers
+                        SET totp_secret = :totp_secret, enabled_2fa = :enabled
+                        WHERE id = :user_id
+                    """),
+                    {"user_id": user_id, "totp_secret": totp_secret, "enabled": enabled}
+                )
+                await db.commit()
+                print(f"Successfully updated 2FA for user {user_id}")
+        except Exception as e:
+            print(f"Error in update_volunteer_2fa: {e}")
+            await Database.log_database_error("update_volunteer_2fa", str(e), f"User ID: {user_id}, Enabled: {enabled}")
+            raise
     
     @staticmethod
     async def update_volunteer(user_id: int, updates: dict):
         """Update volunteer fields"""
-        async with AsyncSessionLocal() as db:
-            set_clause = ", ".join(f"{k} = :{k}" for k in updates.keys())
-            await db.execute(
-                text(f"UPDATE volunteers SET {set_clause} WHERE id = :user_id"),
-                {**updates, "user_id": user_id}
-            )
-            await db.commit()
+        try:
+            print(f"Updating volunteer {user_id} with fields: {list(updates.keys())}")
+            async with AsyncSessionLocal() as db:
+                set_clause = ", ".join(f"{k} = :{k}" for k in updates.keys())
+                sql = f"UPDATE volunteers SET {set_clause} WHERE id = :user_id"
+                print(f"Executing SQL: {sql}")
+                await db.execute(
+                    text(sql),
+                    {**updates, "user_id": user_id}
+                )
+                await db.commit()
+                print(f"Successfully updated volunteer {user_id}")
+        except Exception as e:
+            print(f"Error in update_volunteer: {e}")
+            await Database.log_database_error("update_volunteer", str(e), f"User ID: {user_id}, Updates: {updates}")
+            raise
     
     @staticmethod
     async def delete_volunteer(user_id: int):
         """Delete volunteer"""
         try:
+            print(f"Attempting to delete volunteer with ID: {user_id}")
             async with AsyncSessionLocal() as db:
+                print(f"Executing SQL: UPDATE volunteers SET active = FALSE WHERE id = {user_id}")
                 await db.execute(
                     text("UPDATE volunteers SET active = FALSE WHERE id = :user_id"),
                     {"user_id": user_id}
                 )
                 await db.commit()
+                print(f"Successfully deleted volunteer with ID: {user_id}")
         except Exception as e:
             print(f"Error in delete_volunteer: {e}")
+            await Database.log_database_error("delete_volunteer", str(e), f"User ID: {user_id}")
             raise
     
     @staticmethod
     async def get_child_qr(child_id: int) -> Optional[str]:
         """Get QR value for child"""
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                SELECT qr_value FROM qr_codes
-                WHERE child_id = :child_id AND active = TRUE
-            """), {"child_id": child_id})
-            row = result.fetchone()
-            return row[0] if row else None
+        try:
+            print(f"Getting QR code for child_id: {child_id}")
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("""
+                    SELECT qr_value FROM qr_codes
+                    WHERE child_id = :child_id AND active = TRUE
+                """), {"child_id": child_id})
+                row = result.fetchone()
+                qr_value = row[0] if row else None
+                print(f"Found QR code for child {child_id}: {qr_value is not None}")
+                return qr_value
+        except Exception as e:
+            print(f"Error in get_child_qr: {e}")
+            await Database.log_database_error("get_child_qr", str(e), f"Child ID: {child_id}")
+            raise
 
     @staticmethod
     async def create_program(name: str, min_age: Optional[int] = None, max_age: Optional[int] = None) -> int:
         """Create a new program"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("""
-                    INSERT INTO programs (name, min_age, max_age)
-                    VALUES (:name, :min_age, :max_age)
-                """),
-                {"name": name, "min_age": min_age, "max_age": max_age}
-            )
-            result = await db.execute(text("SELECT last_insert_rowid()"))
-            program_id = result.scalar()
-            await db.commit()
-            return program_id
+        try:
+            print(f"Creating program: {name}, min_age: {min_age}, max_age: {max_age}")
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("""
+                        INSERT INTO programs (name, min_age, max_age)
+                        VALUES (:name, :min_age, :max_age)
+                    """),
+                    {"name": name, "min_age": min_age, "max_age": max_age}
+                )
+                result = await db.execute(text("SELECT last_insert_rowid()"))
+                program_id = result.scalar()
+                await db.commit()
+                print(f"Created program {name} with ID {program_id}")
+                return program_id
+        except Exception as e:
+            print(f"Error in create_program: {e}")
+            await Database.log_database_error("create_program", str(e), f"Name: {name}, Min Age: {min_age}, Max Age: {max_age}")
+            raise
 
     @staticmethod
     async def update_program(program_id: int, updates: Dict[str, Any]):
         """Update program information"""
-        async with AsyncSessionLocal() as db:
-            # Build update query dynamically
-            set_parts = []
-            params = {"program_id": program_id}
-            
-            for key, value in updates.items():
-                if value is not None:
-                    set_parts.append(f"{key} = :{key}")
-                    params[key] = value
-            
-            if set_parts:
-                query = f"UPDATE programs SET {', '.join(set_parts)} WHERE id = :program_id"
-                await db.execute(text(query), params)
-                await db.commit()
+        try:
+            print(f"Updating program {program_id} with fields: {list(updates.keys())}")
+            async with AsyncSessionLocal() as db:
+                # Build update query dynamically
+                set_parts = []
+                params = {"program_id": program_id}
+                
+                for key, value in updates.items():
+                    if value is not None:
+                        set_parts.append(f"{key} = :{key}")
+                        params[key] = value
+                
+                if set_parts:
+                    query = f"UPDATE programs SET {', '.join(set_parts)} WHERE id = :program_id"
+                    print(f"Executing SQL: {query}")
+                    await db.execute(text(query), params)
+                    await db.commit()
+                    print(f"Successfully updated program {program_id}")
+        except Exception as e:
+            print(f"Error in update_program: {e}")
+            await Database.log_database_error("update_program", str(e), f"Program ID: {program_id}, Updates: {updates}")
+            raise
 
     @staticmethod
     async def delete_program(program_id: int):
         """Delete program (mark as inactive)"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("UPDATE programs SET active = FALSE WHERE id = :program_id"),
-                {"program_id": program_id}
-            )
-            await db.commit()
+        try:
+            print(f"Deleting program with ID: {program_id}")
+            async with AsyncSessionLocal() as db:
+                print(f"Executing SQL: UPDATE programs SET active = FALSE WHERE id = {program_id}")
+                await db.execute(
+                    text("UPDATE programs SET active = FALSE WHERE id = :program_id"),
+                    {"program_id": program_id}
+                )
+                await db.commit()
+                print(f"Successfully deleted program with ID: {program_id}")
+        except Exception as e:
+            print(f"Error in delete_program: {e}")
+            await Database.log_database_error("delete_program", str(e), f"Program ID: {program_id}")
+            raise
 
     @staticmethod
     async def create_attendance(child_id: int, program_id: int, station_id: str, created_by: str) -> int:
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("INSERT INTO attendance (child_id, program_id, station_id, created_by, checkin_time) VALUES (:child_id, :program_id, :station_id, :created_by, datetime('now'))"),
-                {"child_id": child_id, "program_id": program_id, "station_id": station_id, "created_by": created_by}
-            )
-            await db.commit()
-            result = await db.execute(text("SELECT last_insert_rowid()"))
-            return result.scalar()
+        try:
+            print(f"Creating attendance record for child {child_id}, program {program_id}, station {station_id}, created by {created_by}")
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    text("INSERT INTO attendance (child_id, program_id, station_id, created_by, checkin_time) VALUES (:child_id, :program_id, :station_id, :created_by, datetime('now'))"),
+                    {"child_id": child_id, "program_id": program_id, "station_id": station_id, "created_by": created_by}
+                )
+                await db.commit()
+                result = await db.execute(text("SELECT last_insert_rowid()"))
+                attendance_id = result.scalar()
+                print(f"Created attendance record with ID {attendance_id}")
+                return attendance_id
+        except Exception as e:
+            print(f"Error in create_attendance: {e}")
+            await Database.log_database_error("create_attendance", str(e), f"Child ID: {child_id}, Program ID: {program_id}, Station: {station_id}, Created by: {created_by}")
+            raise
 
     @staticmethod
     async def search_children(query: str) -> List[Dict[str, Any]]:
         """Search children by first or last name"""
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("""
-                SELECT c.id, c.first_name, c.last_name, f.family_name
-                FROM children c
-                JOIN families f ON c.family_id = f.id
-                WHERE c.active = TRUE AND (c.first_name LIKE :query OR c.last_name LIKE :query)
-                ORDER BY c.last_name, c.first_name
-                LIMIT 10
-            """), {"query": f"%{query}%"})
-            rows = result.fetchall()
-            columns = result.keys()
-            return [dict(zip(columns, row)) for row in rows]
-    
-    
-    @staticmethod
-    async def update_volunteer(user_id: int, updates: Dict[str, Any]):
-        """Update volunteer information"""
-        async with AsyncSessionLocal() as db:
-            # Build update query dynamically
-            set_parts = []
-            params = {"user_id": user_id}
-            
-            for key, value in updates.items():
-                if value is not None:
-                    set_parts.append(f"{key} = :{key}")
-                    params[key] = value
-            
-            if set_parts:
-                query = f"UPDATE volunteers SET {', '.join(set_parts)} WHERE id = :user_id"
-                await db.execute(text(query), params)
-                await db.commit()
-    
-    
-    
+        try:
+            print(f"Searching children with query: '{query}'")
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("""
+                    SELECT c.id, c.first_name, c.last_name, f.family_name
+                    FROM children c
+                    JOIN families f ON c.family_id = f.id
+                    WHERE c.active = TRUE AND (c.first_name LIKE :query OR c.last_name LIKE :query)
+                    ORDER BY c.last_name, c.first_name
+                    LIMIT 10
+                """), {"query": f"%{query}%"})
+                rows = result.fetchall()
+                columns = result.keys()
+                children = [dict(zip(columns, row)) for row in rows]
+                print(f"Found {len(children)} children matching query '{query}'")
+                return children
+        except Exception as e:
+            print(f"Error in search_children: {e}")
+            await Database.log_database_error("search_children", str(e), f"Query: {query}")
+            raise
