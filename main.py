@@ -10,6 +10,7 @@ from database import init_database
 from database import get_db
 from database import AsyncSessionLocal
 from database import Database
+from sqlalchemy import text
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
