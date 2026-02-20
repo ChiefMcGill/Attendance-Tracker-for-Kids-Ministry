@@ -441,8 +441,8 @@ class Database:
         """Delete volunteer"""
         async with AsyncSessionLocal() as db:
             await db.execute(
-                text("UPDATE volunteers SET active = FALSE WHERE id = ?"),
-                (user_id,)
+                text("UPDATE volunteers SET active = FALSE WHERE id = :user_id"),
+                {"user_id": user_id}
             )
             await db.commit()
     
@@ -472,6 +472,34 @@ class Database:
             program_id = result.scalar()
             await db.commit()
             return program_id
+
+    @staticmethod
+    async def update_program(program_id: int, updates: Dict[str, Any]):
+        """Update program information"""
+        async with AsyncSessionLocal() as db:
+            # Build update query dynamically
+            set_parts = []
+            params = {"program_id": program_id}
+            
+            for key, value in updates.items():
+                if value is not None:
+                    set_parts.append(f"{key} = :{key}")
+                    params[key] = value
+            
+            if set_parts:
+                query = f"UPDATE programs SET {', '.join(set_parts)} WHERE id = :program_id"
+                await db.execute(text(query), params)
+                await db.commit()
+
+    @staticmethod
+    async def delete_program(program_id: int):
+        """Delete program (mark as inactive)"""
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("UPDATE programs SET active = FALSE WHERE id = :program_id"),
+                {"program_id": program_id}
+            )
+            await db.commit()
 
     @staticmethod
     async def create_attendance(child_id: int, program_id: int, station_id: str, created_by: str) -> int:
