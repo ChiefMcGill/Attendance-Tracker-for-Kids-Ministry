@@ -552,15 +552,10 @@ async def register_new_child(request: RegisterRequest, current_user: dict = Depe
         if not request.parent_phone.isdigit() or len(request.parent_phone) != 10:
             print(f"Invalid phone number: {request.parent_phone}")
             await Database.log_event("warning", "api", f"Invalid phone number format", 
-                                   details=f"Phone: {request.parent_phone}, User: {current_user['username']}")
+                           details=f"Phone: {request.parent_phone}, User: {current_user['username']}")
             raise HTTPException(status_code=400, detail="Phone number must be exactly 10 digits")
         
-        # Validate email
-        if '@' not in request.parent_email or '.' not in request.parent_email:
-            print(f"Invalid email format: {request.parent_email}")
-            await Database.log_event("warning", "api", f"Invalid email format", 
-                                   details=f"Email: {request.parent_email}, User: {current_user['username']}")
-            raise HTTPException(status_code=400, detail="Invalid email address")
+        # Email is optional - no validation needed
         
         # Combine birth date
         try:

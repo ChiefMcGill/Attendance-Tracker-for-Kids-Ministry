@@ -35,7 +35,7 @@ class RegisterRequest(BaseModel):
     parent_first_name: str
     parent_last_name: str
     parent_phone: str
-    parent_email: str
+    parent_email: Optional[str] = None
     parent_relationship: str
     child_first_name: str
     child_last_name: str
