@@ -219,15 +219,12 @@
                     document.getElementById('setup2fa').style.display = 'block';
                     const otpauth = `otpauth://totp/Kids%20Ministry:${username}?secret=${data.totp_secret}&issuer=Kids%20Ministry`;
                     document.getElementById('manualCode').textContent = data.totp_secret;
-                    fetch('/api/qr/' + encodeURIComponent(otpauth))
-                    .then(res => res.text())
-                    .then(svg => {
-                        document.getElementById('qrCode').innerHTML = svg;
-                    })
-                    .catch(err => {
-                        console.error('Error loading QR code:', err);
-                        showSetupMessage('Error loading QR code. Use manual code.', 'error');
-                    });
+                    const qrImg = document.createElement('img');
+                    qrImg.src = '/api/qr/' + encodeURIComponent(otpauth);
+                    qrImg.alt = 'QR Code for 2FA';
+                    qrImg.style.maxWidth = '200px';
+                    qrImg.style.height = 'auto';
+                    document.getElementById('qrCode').appendChild(qrImg);
                 } else if (data.requires_2fa) {
                     otpGroup.style.display = 'block';
                     document.getElementById('otp').focus();
