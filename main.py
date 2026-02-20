@@ -152,9 +152,9 @@ async def startup_event():
     await Database.log_event("info", "api", "Application started")
 
 @app.get("/")
-async def root(request: Request):
-    """Root endpoint - redirect to scanner"""
-    return templates.TemplateResponse("scanner.html", {"request": request})
+async def root(request: Request, current_user: dict = Depends(get_current_user)):
+    """Root endpoint - redirect authenticated users to scanner"""
+    return templates.TemplateResponse("scanner.html", {"request": request, "user": current_user})
 
 @app.get("/health")
 async def health_check():
