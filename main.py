@@ -53,6 +53,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Auth configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+security = HTTPBearer()
+
 # Session middleware with proper HTTPS settings
 app.add_middleware(SessionMiddleware, 
     secret_key=SECRET_KEY,
@@ -66,12 +72,6 @@ app.add_middleware(SessionMiddleware,
 # Static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-
-# Auth configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-security = HTTPBearer()
 
 # Station tokens from environment
 STATION_TOKENS = os.getenv("STATION_TOKENS", "entrance-a,entrance-b,checkout-a").split(",")
