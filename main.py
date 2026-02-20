@@ -106,24 +106,42 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     return encoded_jwt
 
 async def get_current_user(request: Request):
-    token = request.session.get('token')
-    if not token:
-        authorization = request.headers.get("Authorization")
-        if authorization and authorization.startswith("Bearer "):
-            token = authorization[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = str(payload.get("sub"))
-        if username is None:
+        token = request.session.get('token')
+        if not token:
+            authorization = request.headers.get("Authorization")
+            if authorization and authorization.startswith("Bearer "):
+                token = authorization[7:]
+        
+        if not token:
+            print("No authentication token found")
             raise HTTPException(status_code=401, detail="Not authenticated")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    user = await Database.get_user_by_username(username)
-    if user is None:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
+        
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username = str(payload.get("sub"))
+            if username is None:
+                print("No username in token payload")
+                raise HTTPException(status_code=401, detail="Not authenticated")
+        except JWTError as jwt_error:
+            print(f"JWT decode error: {jwt_error}")
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        try:
+            user = await Database.get_user_by_username(username)
+            if user is None:
+                print(f"User not found: {username}")
+                raise HTTPException(status_code=401, detail="Not authenticated")
+        except Exception as db_error:
+            print(f"Database error getting user {username}: {db_error}")
+            raise HTTPException(status_code=500, detail="Authentication service unavailable")
+        
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in get_current_user: {e}")
+        raise HTTPException(status_code=500, detail="Authentication error")
 
 @app.on_event("startup")
 async def startup_event():
@@ -610,146 +628,222 @@ async def get_attendance_stats(current_user: dict = Depends(get_current_user)):
 @app.get("/api/volunteers")
 async def get_volunteers(current_user: dict = Depends(get_current_user)):
     """Get all volunteers - Admin only"""
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     try:
-        from sqlalchemy import text
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized access to volunteers list", 
+                                   details=f"User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
         print("before get_all_volunteers")
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT id, username, first_name, last_name, role, enabled_2fa, active FROM volunteers ORDER BY username"))
-            rows = result.fetchall()
-            columns = result.keys()
-            volunteers = [dict(zip(columns, row)) for row in rows]
-        print(f"volunteers: {volunteers}")
-        return volunteers
+        try:
+            from sqlalchemy import text
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("SELECT id, username, first_name, last_name, role, enabled_2fa, active FROM volunteers ORDER BY username"))
+                rows = result.fetchall()
+                columns = result.keys()
+                volunteers = [dict(zip(columns, row)) for row in rows]
+            print(f"volunteers: {volunteers}")
+            await Database.log_event("info", "api", "Volunteers list retrieved", 
+                                   details=f"Count: {len(volunteers)}, Requested by: {current_user['username']}")
+            return volunteers
+        except Exception as db_error:
+            print(f"error in get_volunteers: {db_error}")
+            await Database.log_event("error", "api", f"Database error in get_volunteers: {str(db_error)}", 
+                                   details=f"User: {current_user['username']}")
+            raise HTTPException(status_code=500, detail="Database error")
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"error in get_volunteers: {e}")
-        await Database.log_event("error", "api", f"Error getting volunteers: {str(e)}")
+        print(f"Unexpected error in get_volunteers: {e}")
+        await Database.log_event("error", "api", f"Unexpected error in get_volunteers: {str(e)}", 
+                               details=f"User: {current_user['username']}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/volunteers")
 async def add_volunteer(request: AddVolunteerRequest, current_user: dict = Depends(get_current_user)):
     """Add new volunteer - Admin only"""
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    print(f"Received request: {request.dict()}")
-    
     try:
-        # Check if username already exists
-        existing = await Database.get_user_by_username(request.username)
-        if existing:
-            raise HTTPException(status_code=400, detail="Username already exists")
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized volunteer creation attempt", 
+                                   details=f"User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Ensure role is set
-        request.role = request.role or "volunteer"
+        print(f"Received request: {request.dict()}")
         
-        # Generate random password
-        password = secrets.token_urlsafe(12)
-        password_hash = get_password_hash(password)
-        
-        # Create volunteer
         try:
-            volunteer_id = await Database.create_volunteer(
-                username=request.username,
-                password_hash=password_hash,
-                first_name=request.first_name,
-                last_name=request.last_name,
-                role=request.role
-            )
-            print(f"Volunteer created with ID: {volunteer_id}")
-        except Exception as e:
-            print(f"Error in create_volunteer: {e}")
+            # Check if username already exists
+            existing = await Database.get_user_by_username(request.username)
+            if existing:
+                await Database.log_event("warning", "api", f"Duplicate username attempt: {request.username}", 
+                                       details=f"Attempted by: {current_user['username']}")
+                raise HTTPException(status_code=400, detail="Username already exists")
+            
+            # Ensure role is set
+            request.role = request.role or "volunteer"
+            
+            # Generate random password
+            password = secrets.token_urlsafe(12)
+            password_hash = get_password_hash(password)
+            
+            # Create volunteer
+            try:
+                volunteer_id = await Database.create_volunteer(
+                    username=request.username,
+                    password_hash=password_hash,
+                    first_name=request.first_name,
+                    last_name=request.last_name,
+                    role=request.role
+                )
+                print(f"Volunteer created with ID: {volunteer_id}")
+            except Exception as create_error:
+                print(f"Error in create_volunteer: {create_error}")
+                await Database.log_event("error", "api", f"Failed to create volunteer {request.username}: {str(create_error)}", 
+                                       details=f"Attempted by: {current_user['username']}")
+                raise
+            
+            # Log event
+            await Database.log_event("info", "api", f"New volunteer created: {request.username}", 
+                                   details=f"Created by: {current_user['username']}")
+            
+            return {
+                "success": True,
+                "message": f"Volunteer {request.username} created successfully",
+                "volunteer_id": volunteer_id,
+                "temp_password": password  # Return temp password so admin can give it to volunteer
+            }
+            
+        except HTTPException:
             raise
-        
-        # Log event
-        await Database.log_event("info", "api", f"New volunteer created: {request.username}", 
-                               details=f"Created by: {current_user['username']}")
-        
-        return {
-            "success": True,
-            "message": f"Volunteer {request.username} created successfully",
-            "volunteer_id": volunteer_id,
-            "temp_password": password  # Return temp password so admin can give it to volunteer
-        }
-        
+        except Exception as validation_error:
+            print(f"Validation error in add_volunteer: {validation_error}")
+            await Database.log_event("error", "api", f"Validation error creating volunteer: {str(validation_error)}", 
+                                   details=f"Username: {request.username}, User: {current_user['username']}")
+            raise HTTPException(status_code=400, detail="Invalid volunteer data")
+            
     except HTTPException:
         raise
     except Exception as e:
         print(f"Unexpected error in add_volunteer: {e}")
-        await Database.log_event("error", "api", f"Error creating volunteer: {str(e)}")
+        await Database.log_event("error", "api", f"Unexpected error creating volunteer: {str(e)}", 
+                               details=f"Username: {request.username}, User: {current_user['username']}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.put("/api/volunteers/{volunteer_id}")
 async def update_volunteer(volunteer_id: int, request: UpdateVolunteerRequest, current_user: dict = Depends(get_current_user)):
     """Update volunteer - Admin only"""
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     try:
-        # Prepare updates dict
-        updates = {}
-        if request.first_name is not None:
-            updates['first_name'] = request.first_name
-        if request.last_name is not None:
-            updates['last_name'] = request.last_name
-        if request.role is not None:
-            updates['role'] = request.role
-        if request.active is not None:
-            updates['active'] = request.active
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized volunteer update attempt", 
+                                   details=f"Volunteer ID: {volunteer_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Handle 2FA changes
-        if request.enabled_2fa is not None:
-            if request.enabled_2fa:
-                # Generate new TOTP secret if enabling
-                totp_secret = pyotp.random_base32()
-                await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
-            else:
-                # Disable 2FA
-                await Database.update_volunteer_2fa(volunteer_id, None, False)
-        
-        # Update other fields
-        if updates:
-            await Database.update_volunteer(volunteer_id, updates)
-        
-        await Database.log_event("info", "api", f"Volunteer {volunteer_id} updated", 
-                               details=f"Updated by: {current_user['username']}")
-        
-        return {"success": True, "message": "Volunteer updated successfully"}
-        
+        try:
+            # Prepare updates dict
+            updates = {}
+            if request.first_name is not None:
+                updates['first_name'] = request.first_name
+            if request.last_name is not None:
+                updates['last_name'] = request.last_name
+            if request.role is not None:
+                updates['role'] = request.role
+            if request.active is not None:
+                updates['active'] = request.active
+            
+            # Handle 2FA changes
+            if request.enabled_2fa is not None:
+                try:
+                    if request.enabled_2fa:
+                        # Generate new TOTP secret if enabling
+                        totp_secret = pyotp.random_base32()
+                        await Database.update_volunteer_2fa(volunteer_id, totp_secret, True)
+                        await Database.log_event("info", "api", f"2FA enabled for volunteer {volunteer_id}", 
+                                               details=f"Updated by: {current_user['username']}")
+                    else:
+                        # Disable 2FA
+                        await Database.update_volunteer_2fa(volunteer_id, None, False)
+                        await Database.log_event("info", "api", f"2FA disabled for volunteer {volunteer_id}", 
+                                               details=f"Updated by: {current_user['username']}")
+                except Exception as fa_error:
+                    print(f"Error updating 2FA for volunteer {volunteer_id}: {fa_error}")
+                    await Database.log_event("error", "api", f"Failed to update 2FA for volunteer {volunteer_id}: {str(fa_error)}", 
+                                           details=f"User: {current_user['username']}")
+                    raise HTTPException(status_code=500, detail="Failed to update 2FA settings")
+            
+            # Update other fields
+            if updates:
+                try:
+                    await Database.update_volunteer(volunteer_id, updates)
+                except Exception as update_error:
+                    print(f"Error updating volunteer {volunteer_id}: {update_error}")
+                    await Database.log_event("error", "api", f"Failed to update volunteer {volunteer_id}: {str(update_error)}", 
+                                           details=f"Updates: {updates}, User: {current_user['username']}")
+                    raise
+            
+            await Database.log_event("info", "api", f"Volunteer {volunteer_id} updated", 
+                                   details=f"Updates: {list(updates.keys()) if updates else '2FA only'}, Updated by: {current_user['username']}")
+            
+            return {"success": True, "message": "Volunteer updated successfully"}
+            
+        except HTTPException:
+            raise
+        except Exception as validation_error:
+            print(f"Validation error in update_volunteer: {validation_error}")
+            await Database.log_event("error", "api", f"Validation error updating volunteer {volunteer_id}: {str(validation_error)}", 
+                                   details=f"User: {current_user['username']}")
+            raise HTTPException(status_code=400, detail="Invalid update data")
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        await Database.log_event("error", "api", f"Error updating volunteer: {str(e)}")
+        print(f"Unexpected error in update_volunteer: {e}")
+        await Database.log_event("error", "api", f"Unexpected error updating volunteer {volunteer_id}: {str(e)}", 
+                               details=f"User: {current_user['username']}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.delete("/api/volunteers/{volunteer_id}")
 async def delete_volunteer(volunteer_id: int, current_user: dict = Depends(get_current_user)):
     """Delete volunteer - Admin only (cannot delete admin)"""
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
     try:
-        # Check if trying to delete admin
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT role FROM volunteers WHERE id = :id"), {"id": volunteer_id})
-            row = result.fetchone()
-            if row and row[0] == 'admin':
-                raise HTTPException(status_code=400, detail="Cannot delete admin users")
-        
-        await Database.delete_volunteer(volunteer_id)
+        if current_user['role'] != 'admin':
+            await Database.log_event("warning", "api", "Unauthorized volunteer deletion attempt", 
+                                   details=f"Volunteer ID: {volunteer_id}, User: {current_user['username']}")
+            raise HTTPException(status_code=403, detail="Admin access required")
         
         try:
-            await Database.log_event("info", "api", f"Volunteer {volunteer_id} deleted", 
-                                   details=f"Deleted by: {current_user['username']}")
-        except Exception as e:
-            print(f"Log error: {e}")
-        
-        return {"success": True, "message": "Volunteer deleted successfully"}
-        
+            # Check if trying to delete admin
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(text("SELECT role FROM volunteers WHERE id = :id"), {"id": volunteer_id})
+                row = result.fetchone()
+                if row and row[0] == 'admin':
+                    await Database.log_event("warning", "api", "Attempted to delete admin user", 
+                                           details=f"Volunteer ID: {volunteer_id}, User: {current_user['username']}")
+                    raise HTTPException(status_code=400, detail="Cannot delete admin users")
+            
+            try:
+                await Database.delete_volunteer(volunteer_id)
+                await Database.log_event("info", "api", f"Volunteer {volunteer_id} deleted", 
+                                       details=f"Deleted by: {current_user['username']}")
+                return {"success": True, "message": "Volunteer deleted successfully"}
+            except Exception as delete_error:
+                print(f"Error deleting volunteer {volunteer_id}: {delete_error}")
+                await Database.log_event("error", "api", f"Failed to delete volunteer {volunteer_id}: {str(delete_error)}", 
+                                       details=f"User: {current_user['username']}")
+                raise HTTPException(status_code=500, detail="Failed to delete volunteer")
+            
+        except HTTPException:
+            raise
+        except Exception as db_error:
+            print(f"Database error in delete_volunteer: {db_error}")
+            await Database.log_event("error", "api", f"Database error deleting volunteer {volunteer_id}: {str(db_error)}", 
+                                   details=f"User: {current_user['username']}")
+            raise HTTPException(status_code=500, detail="Database error")
+            
     except HTTPException:
         raise
     except Exception as e:
-        await Database.log_event("error", "api", f"Error deleting volunteer: {str(e)}")
+        print(f"Unexpected error in delete_volunteer: {e}")
+        await Database.log_event("error", "api", f"Unexpected error deleting volunteer {volunteer_id}: {str(e)}", 
+                               details=f"User: {current_user['username']}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/me")
