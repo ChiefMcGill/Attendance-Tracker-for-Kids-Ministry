@@ -426,7 +426,8 @@
                 body: JSON.stringify({
                     session_id: sessionData.sessionId,
                     station_id: sessionData.stationId,
-                    device_id: sessionData.deviceId
+                    device_id: sessionData.deviceId,
+                    created_by: 'volunteer' // Default for MVP
                 })
             })
             .then(response => response.json())

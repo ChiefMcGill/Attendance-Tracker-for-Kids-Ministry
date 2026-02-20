@@ -336,6 +336,8 @@ class Database:
                 {"child_id": child_id, "qr_value": qr_value}
             )
             
+            await db.commit()
+            
     @staticmethod
     async def get_session_info(session_id: str) -> Optional[Dict[str, Any]]:
         """Get session info for confirmation page"""
@@ -408,37 +410,6 @@ class Database:
             await db.commit()
             return (await db.execute(text("SELECT last_insert_rowid()"))).scalar()
     
-    @staticmethod
-    async def create_program(name: str, min_age: int, max_age: int) -> int:
-        """Create a new program"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("""
-                    INSERT INTO programs (name, min_age, max_age)
-                    VALUES (:name, :min_age, :max_age)
-                """),
-                {"name": name, "min_age": min_age, "max_age": max_age}
-            )
-            await db.commit()
-            return (await db.execute(text("SELECT last_insert_rowid()"))).scalar()
-    
-    @staticmethod
-    async def update_program(program_id: int, updates: dict):
-        """Update program fields"""
-        async with AsyncSessionLocal() as db:
-            set_clause = ", ".join(f"{k} = :{k}" for k in updates.keys())
-            await db.execute(
-                text(f"UPDATE programs SET {set_clause} WHERE id = :program_id"),
-                {**updates, "program_id": program_id}
-            )
-            await db.commit()
-    
-    @staticmethod
-    async def delete_program(program_id: int):
-        """Delete program"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(text("DELETE FROM programs WHERE id = :program_id"), {"program_id": program_id})
-            await db.commit()
     
     @staticmethod
     async def update_volunteer_2fa(user_id: int, totp_secret: str, enabled: bool):
@@ -529,41 +500,6 @@ class Database:
             columns = result.keys()
             return [dict(zip(columns, row)) for row in rows]
     
-    @staticmethod
-    async def get_session_info(session_id: str) -> Optional[Dict[str, Any]]:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                text("""
-                    SELECT s.id, s.session_id, s.child_id, s.program_id, s.station_id, s.created_at,
-                           c.first_name, c.last_name, c.birth_date, f.family_name
-                    FROM checkin_sessions s
-                    JOIN children c ON s.child_id = c.id
-                    JOIN families f ON c.family_id = f.id
-                    WHERE s.session_id = :session_id
-                """),
-                {"session_id": session_id}
-            )
-            row = result.fetchone()
-            if not row:
-                return None
-            # Get programs
-            programs_result = await db.execute(text("SELECT id, name, min_age, max_age FROM programs WHERE active = 1"))
-            programs_rows = programs_result.fetchall()
-            programs = [{"id": r.id, "name": r.name, "min_age": r.min_age, "max_age": r.max_age} for r in programs_rows]
-            from datetime import datetime, timedelta
-            expires_at = datetime.fromisoformat(row.created_at) + timedelta(minutes=5)
-            return {
-                "session_id": row.session_id,
-                "child_info": {
-                    "id": row.child_id,
-                    "first_name": row.first_name,
-                    "last_name": row.last_name,
-                    "birth_date": row.birth_date,
-                    "family_name": row.family_name
-                },
-                "programs": programs,
-                "expires_at": expires_at
-            }
     
     @staticmethod
     async def update_volunteer(user_id: int, updates: Dict[str, Any]):
@@ -583,35 +519,5 @@ class Database:
                 await db.execute(text(query), params)
                 await db.commit()
     
-    @staticmethod
-    async def update_program(program_id: int, updates: Dict[str, Any]):
-        """Update program information"""
-        async with AsyncSessionLocal() as db:
-            set_parts = []
-            params = {"program_id": program_id}
-            
-            for key, value in updates.items():
-                if value is not None:
-                    set_parts.append(f"{key} = :{key}")
-                    params[key] = value
-            
-            if set_parts:
-                query = f"UPDATE programs SET {', '.join(set_parts)} WHERE id = :program_id"
-                await db.execute(text(query), params)
-                await db.commit()
     
-    @staticmethod
-    async def delete_program(program_id: int):
-        """Soft delete a program by setting active=false"""
-        async with AsyncSessionLocal() as db:
-            await db.execute(
-                text("UPDATE programs SET active = FALSE WHERE id = :program_id"),
-                {"program_id": program_id}
-            )
-            await db.commit()
     
-    @staticmethod
-    async def log_event(level: str, category: str, message: str, details: str = ""):
-        async with AsyncSessionLocal() as db:
-            await db.execute(text("INSERT INTO logs (level, category, message, details) VALUES (:level, :category, :message, :details)"), {"level": level, "category": category, "message": message, "details": details})
-            await db.commit()

@@ -259,64 +259,6 @@ async def scan_qr_code(request: ScanRequest):
         await Database.log_event("error", "api", f"Error scanning QR code: {str(e)}", 
                                details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
-async def scan_qr_code(request: ScanRequest):
-    """
-    Scan QR code and create check-in session
-    
-    This endpoint is called when a QR code is scanned at a station.
-    It validates the QR code, retrieves child information, and creates a temporary session.
-    """
-    try:
-        # Validate station
-        if not validate_station(request.station_id):
-            await Database.log_event("warning", "api", f"Invalid station ID: {request.station_id}", 
-                                   details=f"Device: {request.device_id}")
-            return ScanResponse(
-                success=False,
-                message="Invalid station ID"
-            )
-        
-        # Look up child by QR code
-        child_info = await Database.get_child_by_qr(request.qr_value)
-        
-        if not child_info:
-            await Database.log_event("warning", "api", "QR code not found", 
-                                   details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
-            return ScanResponse(
-                success=False,
-                message="QR code not found. Please register this child."
-            )
-        
-        # Generate session ID
-        session_id = secrets.token_urlsafe(16)
-        
-        # Get available programs
-        programs = await Database.get_programs()
-        
-        # Create check-in session (without program_id for now - will be selected by user)
-        await Database.create_checkin_session(
-            session_id=session_id,
-            child_id=child_info["id"],
-            program_id=1,  # Default to first program, will be updated
-            station_id=request.station_id,
-            device_id=request.device_id
-        )
-        
-        await Database.log_event("info", "api", "QR code scanned successfully", 
-                               details=f"Child: {child_info['first_name']} {child_info['last_name']}, Session: {session_id}")
-        
-        return ScanResponse(
-            success=True,
-            session_id=session_id,
-            child_info=child_info,
-            programs=programs,
-            message=f"Found {child_info['first_name']} {child_info['last_name']}"
-        )
-        
-    except Exception as e:
-        await Database.log_event("error", "api", f"Error scanning QR code: {str(e)}", 
-                               details=f"QR: {request.qr_value[:10]}..., Station: {request.station_id}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/checkin")
 async def confirm_checkin(request: CheckinRequest):
