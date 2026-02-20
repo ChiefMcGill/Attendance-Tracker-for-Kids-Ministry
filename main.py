@@ -831,6 +831,7 @@ async def change_password(request: ChangePasswordRequest, current_user: dict = D
     await Database.update_volunteer(current_user['id'], {'password_hash': new_hash})
     return {"success": True, "message": "Password changed"}
 
+@app.get("/api/programs/all")
 async def get_all_programs(current_user: dict = Depends(get_current_user)):
     """Get all programs including inactive ones - Admin only"""
     if current_user['role'] != 'admin':
