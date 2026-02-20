@@ -127,7 +127,7 @@
     </div>
 
     <div class="main-container">
-        <div class="login-container">
+        <div class="login-container" id="loginFormContainer">
             <form id="loginForm">
                 <div class="form-group">
                     <label for="username">Username</label>
@@ -149,22 +149,18 @@
 
             <div id="message" class="message" style="display: none;"></div>
         </div>
-    </div>
 
-    <div id="setup2fa" style="display: none;">
-        <div class="main-container">
-            <div class="login-container">
-                <h3>Set up Two-Factor Authentication</h3>
-                <p>Scan this QR code with your authenticator app:</p>
-                <div id="qrCode" style="text-align: center; margin: 1rem 0;"></div>
-                <p>Or enter this code manually: <strong id="manualCode"></strong></p>
-                <div class="form-group">
-                    <label for="setupOtp">Enter the 6-digit code from your app</label>
-                    <input type="text" id="setupOtp" name="setupOtp" maxlength="6" placeholder="000000">
-                </div>
-                <button class="btn" id="completeSetupBtn">Complete Setup</button>
-                <div id="setupMessage" class="message" style="display: none;"></div>
+        <div class="login-container" id="setup2fa" style="display: none;">
+            <h3>Set up Two-Factor Authentication</h3>
+            <p>Scan this QR code with your authenticator app:</p>
+            <div id="qrCode" style="text-align: center; margin: 1rem 0;"></div>
+            <p>Or enter this code manually: <strong id="manualCode"></strong></p>
+            <div class="form-group">
+                <label for="setupOtp">Enter the 6-digit code from your app</label>
+                <input type="text" id="setupOtp" name="setupOtp" maxlength="6" placeholder="000000">
             </div>
+            <button class="btn" id="completeSetupBtn">Complete Setup</button>
+            <div id="setupMessage" class="message" style="display: none;"></div>
         </div>
     </div>
 
@@ -215,7 +211,7 @@
                 } else if (data.setup_2fa) {
                     setupUsername = username;
                     setupTotpSecret = data.totp_secret;
-                    document.querySelector('.login-container').style.display = 'none';
+                    document.getElementById('loginFormContainer').style.display = 'none';
                     document.getElementById('setup2fa').style.display = 'block';
                     const otpauth = `otpauth://totp/Kids%20Ministry:${username}?secret=${data.totp_secret}&issuer=Kids%20Ministry`;
                     document.getElementById('manualCode').textContent = data.totp_secret;
