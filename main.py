@@ -748,7 +748,7 @@ async def delete_volunteer(volunteer_id: int, current_user: dict = Depends(get_c
     try:
         # Check if trying to delete admin
         async with AsyncSessionLocal() as db:
-            result = await db.execute(text("SELECT role FROM volunteers WHERE id = ?"), (volunteer_id,))
+            result = await db.execute(text("SELECT role FROM volunteers WHERE id = :id"), {"id": volunteer_id})
             row = result.fetchone()
             if row and row[0] == 'admin':
                 raise HTTPException(status_code=400, detail="Cannot delete admin users")
