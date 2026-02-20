@@ -467,6 +467,7 @@
                     } else {
                         submitBtn.textContent = 'Done';
                         submitBtn.type = 'button';
+                        submitBtn.disabled = false;
                         submitBtn.onclick = () => {
                             closeModal();
                             loadVolunteers();
