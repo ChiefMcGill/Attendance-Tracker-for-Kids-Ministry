@@ -107,7 +107,8 @@ class LoginResponse(BaseModel):
 
 class Setup2FARequest(BaseModel):
     username: str
-    totp_code: str
+    otp: str
+    totp_secret: str
 
 class DirectCheckinRequest(BaseModel):
     child_id: int
