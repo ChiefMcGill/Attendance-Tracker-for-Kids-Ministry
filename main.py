@@ -791,6 +791,7 @@ async def setup_2fa(request: Setup2FARequest):
     access_token = create_access_token(
         data={"sub": user['username']}, expires_delta=access_token_expires
     )
+    request.session['token'] = access_token
     return {"success": True, "token": access_token, "role": user['role']}
 
 @app.get("/profile")
